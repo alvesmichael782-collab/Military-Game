@@ -1,0 +1,35 @@
+/* Reference: icon at x 411-435, y 984-1011; "x3" right after it. */
+.hud-plates {
+  position: absolute;
+  transform-origin: left center;
+  left: calc(411 * var(--rp));
+  bottom: calc(69 * var(--rp));
+  display: flex;
+  align-items: center;
+  gap: calc(7 * var(--rp));
+}
+
+.hud-plates__icon {
+  width: calc(24 * var(--rp));
+  height: calc(28 * var(--rp));
+  color: var(--hud-white);
+  filter: drop-shadow(0 0 calc(3 * var(--rp)) rgba(0, 0, 0, 0.6));
+}
+
+.hud-plates__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-plates__count {
+  font-size: calc(24 * var(--rp));
+  font-weight: 500;
+  line-height: 1;
+}
+
+.hud-plates.is-empty .hud-plates__icon,
+.hud-plates.is-empty .hud-plates__count {
+  color: #d8463a;
+  opacity: 0.85;
+}

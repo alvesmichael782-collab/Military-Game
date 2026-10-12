@@ -1,0 +1,51 @@
+/* Stack of short prompts just under the crosshair, clear of the HUD corners. */
+.hud-prompts {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 38 * var(--rp));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10 * var(--rp));
+}
+
+.hud-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--rp));
+  white-space: nowrap;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.hud-prompt[hidden],
+.hud-prompt__error[hidden] {
+  display: none;
+}
+
+.hud-prompt__line {
+  display: flex;
+  align-items: baseline;
+  gap: calc(12 * var(--rp));
+  font-size: calc(19 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(1.5 * var(--rp));
+}
+
+.hud-prompt__amount[data-tone='refund'] {
+  color: #ecd982;
+}
+
+.hud-prompt.is-invalid .hud-prompt__action,
+.hud-prompt.is-invalid .hud-prompt__amount {
+  opacity: 0.7;
+}
+
+.hud-prompt__error {
+  color: #ff3a30;
+  font-size: calc(15 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(1.5 * var(--rp));
+}

@@ -1,0 +1,41 @@
+/* Reference: 167 x 7 px at x 222, bottom edge at y 1007. */
+.hud-health {
+  position: absolute;
+  left: calc(222 * var(--rp));
+  bottom: calc(73 * var(--rp));
+  width: calc(167 * var(--rp));
+  height: calc(7 * var(--rp));
+  /* A faint guide so missing health still reads, without a heavy filled track. */
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: 0 0 calc(4 * var(--rp)) rgba(0, 0, 0, 0.45);
+}
+
+.hud-health__fill,
+.hud-health__trail {
+  position: absolute;
+  inset: 0;
+  background: var(--hud-white);
+  transform-origin: left center;
+  transition: transform 0.18s ease-out;
+}
+
+/* Health just lost, catching up after a short beat. */
+.hud-health__trail {
+  opacity: 0.35;
+}
+
+.hud-health.is-draining .hud-health__trail {
+  transition: transform 0.45s ease-in-out 0.35s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hud-health.is-critical .hud-health__fill {
+    animation: hud-health-critical 1.1s ease-in-out infinite;
+  }
+}
+
+@keyframes hud-health-critical {
+  50% {
+    opacity: 0.45;
+  }
+}

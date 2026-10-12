@@ -1,0 +1,15 @@
+.hud-crosshair,
+.hud-hitmarker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.hud-crosshair__line,
+.hud-hitmarker__tick {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.85);
+}

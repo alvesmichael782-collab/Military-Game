@@ -1,0 +1,62 @@
+/* Positions measured on the 1920x1080 reference: portrait 64 px square at x 70, bottom edge at y 868. */
+.hud-cash {
+  position: absolute;
+  left: calc(70 * var(--rp));
+  bottom: calc(212 * var(--rp));
+  height: calc(64 * var(--rp));
+  display: flex;
+  align-items: center;
+}
+
+/*
+ * Placeholder until there is player portrait art: a dim head-and-shoulders silhouette
+ * in a thin frame, so the slot reads as a portrait rather than an empty box.
+ */
+.hud-cash__portrait {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: calc(64 * var(--rp));
+  height: calc(64 * var(--rp));
+  background:
+    radial-gradient(circle at 50% 40%, #46494c calc(12 * var(--rp)), transparent calc(12.6 * var(--rp))),
+    radial-gradient(ellipse calc(26 * var(--rp)) calc(17 * var(--rp)) at 50% 100%, #3b3e42 97%, transparent 100%),
+    linear-gradient(160deg, #2a2d31 0%, #1b1d20 100%);
+  box-shadow:
+    0 0 calc(6 * var(--rp)) rgba(0, 0, 0, 0.55),
+    inset 0 0 0 calc(1 * var(--rp)) rgba(255, 255, 255, 0.1),
+    inset 0 calc(-12 * var(--rp)) calc(14 * var(--rp)) rgba(0, 0, 0, 0.35);
+}
+
+.hud-cash__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: calc(44 * var(--rp));
+  padding: 0 calc(34 * var(--rp)) 0 calc(11 * var(--rp));
+}
+
+.hud-cash__row > .hud-smear {
+  left: calc(-18 * var(--rp));
+  top: 0;
+  width: calc(100% + 18 * var(--rp));
+  height: 100%;
+}
+
+.hud-cash__amount {
+  position: relative;
+  font-size: calc(26 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(1.5 * var(--rp));
+  line-height: 1;
+  transform-origin: left center;
+}
+
+/* Zero-size anchor for the "+$50" popups, a little past the end of the amount. */
+.hud-cash__popups {
+  position: absolute;
+  left: calc(100% - 20 * var(--rp));
+  top: 50%;
+  width: 0;
+  height: 0;
+}

@@ -1,0 +1,42 @@
+/* Reference: front grenade at x 1662-1690, y 884-914, the stacked outlines overlap it to the right. Offsets are from .hud-br. */
+.hud-grenades {
+  position: absolute;
+  left: calc(-16 * var(--rp));
+  bottom: calc(66 * var(--rp));
+  height: calc(30 * var(--rp));
+}
+
+.hud-grenades__icon {
+  position: absolute;
+  transform-origin: center bottom;
+  left: calc(var(--slot) * 14 * var(--rp));
+  bottom: 0;
+  width: calc(28 * var(--rp));
+  height: calc(30 * var(--rp));
+  /* Outline only: the stacked spares behind the front grenade. */
+  fill: none;
+  stroke: rgba(236, 230, 218, 0.32);
+  stroke-width: 1.4;
+}
+
+.hud-grenades__icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.hud-grenades__icon.is-solid {
+  fill: var(--hud-white);
+  stroke: var(--hud-white);
+  filter: drop-shadow(0 0 calc(3 * var(--rp)) rgba(0, 0, 0, 0.6));
+}
+
+.hud-grenades__icon.is-solid .hud-grenades__hole {
+  fill: #2a2a28;
+  stroke: none;
+}
+
+.hud-grenades__icon.is-empty {
+  stroke: rgba(216, 70, 58, 0.6);
+}

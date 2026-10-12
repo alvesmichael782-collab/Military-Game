@@ -1,0 +1,59 @@
+import { config } from './config';
+import type { EventBus, GameEvents } from './EventBus';
+import { Phase } from './GameState';
+
+interface Tally {
+  kills: number;
+  headshots: number;
+  cashEarned: number;
+}
+
+/**
+ * Counts what happens in each wave and over the whole game, from events: the player's kills and headshot
+ * kills, cash earned, walls lost and the core's HP. Sends `waveSummary` as each aftermath starts and
+ * `matchSummary` when the game ends, for the wave summary and the win and lose screens.
+ */
+export class MatchStats {
+  private readonly wave: Tally & { wallsLost: number } = { kills: 0, headshots: 0, cashEarned: 0, wallsLost: 0 };
+  private readonly total: Tally = { kills: 0, headshots: 0, cashEarned: 0 };
+  private coreHp: number = config.structures.core.hp;
+  private coreMaxHp: number = config.structures.core.hp;
+  private wavesSurvived = 0;
+
+  constructor(private readonly events: EventBus<GameEvents>) {
+    events.on('enemyKilled', ({ source, headshot }) => {
+      if (source !== 'player') return;
+      this.wave.kills++;
+      this.total.kills++;
+      if (headshot) {
+        this.wave.headshots++;
+        this.total.headshots++;
+      }
+    });
+    events.on('cashEarned', ({ amount }) => {
+      this.wave.cashEarned += amount;
+      this.total.cashEarned += amount;
+    });
+    events.on('segmentDestroyed', ({ type }) => {
+      if (type === 'wall') this.wave.wallsLost++;
+    });
+    events.on('coreDamaged', ({ hp, maxHp }) => {
+      this.coreHp = hp;
+      this.coreMaxHp = maxHp;
+    });
+    events.on('phaseChanged', ({ to, wave }) => {
+      if (to === Phase.FIGHT) {
+        this.wave.kills = 0;
+        this.wave.headshots = 0;
+        this.wave.cashEarned = 0;
+        this.wave.wallsLost = 0;
+      } else if (to === Phase.AFTERMATH) {
+        this.wavesSurvived++;
+        this.events.emit('waveSummary', { wave, ...this.wave, coreHp: this.coreHp, coreMaxHp: this.coreMaxHp });
+      }
+    });
+    events.on('gameOver', (e) => {
+      this.events.emit('matchSummary', { ...e, ...this.total, wavesSurvived: this.wavesSurvived });
+    });
+  }
+}

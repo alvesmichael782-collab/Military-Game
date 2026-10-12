@@ -1,0 +1,62 @@
+/*
+ * Offsets from the .hud-br anchor (foot of the divider, x 1678 / y 980 on the reference):
+ * smear x 1516-1756 / y 930-982, "13" ends at x 1668 with its cap top at y 940, "062" starts at x 1691.
+ */
+.hud-ammo__smear {
+  left: calc(-162 * var(--rp));
+  bottom: calc(-4 * var(--rp));
+  width: calc(240 * var(--rp));
+  height: calc(54 * var(--rp));
+}
+
+.hud-ammo__magazine,
+.hud-ammo__reserve {
+  position: absolute;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hud-ammo__magazine {
+  right: calc(10 * var(--rp));
+  bottom: calc(1 * var(--rp));
+  font-size: calc(43 * var(--rp));
+  letter-spacing: calc(2 * var(--rp));
+}
+
+.hud-ammo__magazine {
+  transform-origin: right bottom;
+  transition: opacity 0.15s ease-out;
+}
+
+.hud-ammo__magazine.is-low {
+  color: #ff3a30;
+}
+
+.hud-ammo__magazine.is-reloading {
+  opacity: 0.4;
+}
+
+.hud-ammo__divider {
+  position: absolute;
+  left: calc(-1 * var(--rp));
+  bottom: 0;
+  width: calc(2 * var(--rp));
+  height: calc(48 * var(--rp));
+  background: rgba(236, 230, 218, 0.8);
+  box-shadow: 0 0 calc(2 * var(--rp)) rgba(0, 0, 0, 0.4);
+}
+
+.hud-ammo__reserve {
+  left: calc(13 * var(--rp));
+  bottom: calc(22 * var(--rp));
+  color: #e8d2cc;
+  font-size: calc(18.5 * var(--rp));
+  letter-spacing: calc(1.5 * var(--rp));
+}
+
+.hud-ammo__magazine[hidden],
+.hud-ammo__divider[hidden],
+.hud-ammo__reserve[hidden] {
+  display: none;
+}

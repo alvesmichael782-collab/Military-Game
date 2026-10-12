@@ -1,0 +1,66 @@
+/* Reference: 167 px wide at x 222, top edge at y 985; three bracket-shaped segments. */
+.hud-armor {
+  position: absolute;
+  left: calc(222 * var(--rp));
+  bottom: calc(88 * var(--rp));
+  width: calc(167 * var(--rp));
+  height: calc(7 * var(--rp));
+  display: flex;
+  gap: calc(3 * var(--rp));
+  filter: drop-shadow(0 0 calc(2 * var(--rp)) rgba(0, 0, 0, 0.6));
+}
+
+/*
+ * A thin top edge whose ends curl down, drawn in layers: dim gray underneath (the segment itself),
+ * then the damage trail and the blue fill on top, both clipped to the armor left.
+ */
+.hud-armor__segment,
+.hud-armor__trail,
+.hud-armor__fill {
+  box-sizing: border-box;
+  border: calc(2.5 * var(--rp)) solid rgba(140, 140, 132, 0.7);
+  border-bottom: none;
+  border-radius: calc(6 * var(--rp)) calc(6 * var(--rp)) 0 0;
+}
+
+.hud-armor__segment {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  transform-origin: center bottom;
+}
+
+.hud-armor__trail,
+.hud-armor__fill {
+  position: absolute;
+  /* Sit exactly over the parent's own border. */
+  inset: calc(-2.5 * var(--rp)) calc(-2.5 * var(--rp)) 0;
+  border-color: var(--hud-blue);
+}
+
+.hud-armor__fill {
+  transition: clip-path 0.18s ease-out;
+}
+
+/* Armor just lost, shown as a faint blue that catches up after a short beat. */
+.hud-armor__trail {
+  opacity: 0.4;
+  transition: clip-path 0.18s ease-out;
+}
+
+.hud-armor__segment.is-draining .hud-armor__trail {
+  transition: clip-path 0.45s ease-in-out 0.35s;
+}
+
+/* Restore progress while holding V: a light blue fill growing under the top edge. */
+.hud-armor__plating {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(0.5 * var(--rp));
+  height: calc(3 * var(--rp));
+  background: rgba(130, 195, 255, 0.85);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+}

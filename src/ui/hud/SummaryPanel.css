@@ -1,0 +1,133 @@
+/* Centered over the view, a little above the middle so the crosshair area stays readable. */
+.hud-summary {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  /* A heavier halo than the corner HUD: this text sits in the middle of the bright battlefield. */
+  text-shadow: 0 0 calc(10 * var(--rp)) rgba(0, 0, 0, 0.6), 0 calc(1 * var(--rp)) calc(2 * var(--rp)) rgba(0, 0, 0, 0.85);
+  animation: hud-summary-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hud-summary[hidden] {
+  display: none;
+}
+
+.hud-summary__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(520 * var(--rp));
+  height: calc(92 * var(--rp));
+  padding: 0 calc(44 * var(--rp));
+}
+
+.hud-summary__head > .hud-smear {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-summary__title {
+  position: relative;
+  font-size: calc(50 * var(--rp));
+  font-weight: 700;
+  letter-spacing: calc(3 * var(--rp));
+}
+
+.hud-summary__stats {
+  display: flex;
+  flex-direction: column;
+  gap: calc(11 * var(--rp));
+  width: calc(330 * var(--rp));
+  margin: calc(24 * var(--rp)) 0 0;
+}
+
+.hud-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: calc(22 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(1.5 * var(--rp));
+  animation: hud-summary-row-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(0.15s + var(--row) * 0.07s);
+}
+
+.hud-summary__row dt {
+  opacity: 0.85;
+}
+
+/* Soft shade under the stats so they read over bright sand. No edges: it fades out like a shadow. */
+.hud-summary__stats {
+  position: relative;
+}
+
+.hud-summary__stats::before {
+  content: '';
+  position: absolute;
+  inset: calc(-34 * var(--rp)) calc(-90 * var(--rp)) calc(-60 * var(--rp));
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(14, 8, 5, 0.42), rgba(14, 8, 5, 0.22) 55%, transparent);
+  pointer-events: none;
+}
+
+.hud-summary__row dd {
+  margin: 0;
+  font-size: calc(25 * var(--rp));
+}
+
+.hud-summary__footer {
+  margin-top: calc(26 * var(--rp));
+  font-size: calc(16 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--rp));
+  opacity: 0.75;
+}
+
+@keyframes hud-summary-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 14 * var(--rp)));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes hud-summary-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(6 * var(--rp)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The win and lose screens dim the frozen battlefield behind them; still no panel, just shade. */
+.hud-end {
+  top: 50%;
+}
+
+.hud-end::before {
+  content: '';
+  position: fixed;
+  inset: -50vmax;
+  z-index: -1;
+  background: radial-gradient(circle at center, rgba(12, 7, 5, 0.6) 0, rgba(12, 7, 5, 0.42) 30vmax, rgba(12, 7, 5, 0.62) 60vmax);
+  pointer-events: none;
+}
+
+.hud-end .hud-summary__title {
+  font-size: calc(64 * var(--rp));
+}

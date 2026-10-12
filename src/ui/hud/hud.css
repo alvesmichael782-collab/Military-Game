@@ -1,0 +1,84 @@
+/*
+ * HUD fonts. These are stand-ins for the fonts in UI-Model.jpg.
+ * To swap: drop the real font file in src/assets/fonts/, add an @font-face for it below,
+ * and change --font-wave or --font-hud to its family name.
+ */
+@font-face {
+  font-family: 'Permanent Marker';
+  src: url('../../assets/fonts/PermanentMarker-Regular.ttf') format('truetype');
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('../../assets/fonts/Oswald-Variable.ttf') format('truetype');
+  font-weight: 200 700;
+  font-display: block;
+}
+
+:root {
+  --font-wave: 'Permanent Marker', cursive;
+  --font-hud: 'Oswald', 'Arial Narrow', sans-serif;
+
+  /*
+   * One pixel of the 1920x1080 reference, so sizes can be copied straight from UI-Model.jpg.
+   * Scales with height, but shrinks on unusually narrow windows so the two bottom corners never meet.
+   */
+  --rp: min(calc(100vh / 1080), calc(100vw / 1200));
+
+  --hud-white: #ece6da;
+  --hud-red: #b8141c;
+  --hud-blue: #2b8ef5;
+  /* A wide soft halo for bright sand, plus a tight contact shadow that keeps edges crisp. */
+  --hud-shadow: 0 0 calc(7 * var(--rp)) rgba(0, 0, 0, 0.45), 0 calc(1 * var(--rp)) calc(2 * var(--rp)) rgba(0, 0, 0, 0.7);
+}
+
+/* Full-resolution DOM layer over the canvas; never part of the 3D render or its retro filter. */
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  color: var(--hud-white);
+  font-family: var(--font-hud);
+  text-shadow: var(--hud-shadow);
+  /* Fixed-width digits so counters do not jitter as values change. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud *,
+  .hud *::before,
+  .hud *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* One digit of a counter. Wide enough for the widest digit, so values never shift the layout. See digits.ts. */
+.hud-digit {
+  display: inline-block;
+  width: 0.56em;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.hud-smear {
+  position: absolute;
+  display: block;
+}
+
+/*
+ * Zero-size anchor for the bottom-right cluster, at the foot of the ammo divider
+ * (x 1678, y 980 on the reference). Ammo, weapon name and grenades are placed around it.
+ */
+.hud-br {
+  position: absolute;
+  right: calc(242 * var(--rp));
+  bottom: calc(100 * var(--rp));
+  width: 0;
+  height: 0;
+}

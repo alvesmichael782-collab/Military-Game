@@ -1,0 +1,20 @@
+/* The "25" in the reference spans x 57-150 and y 915-1010 at 1920x1080. */
+.hud-wave {
+  position: absolute;
+  left: calc(57 * var(--rp));
+  bottom: calc(52 * var(--rp));
+  color: var(--hud-red);
+  font-family: var(--font-wave);
+  font-size: calc(130 * var(--rp));
+  line-height: 1;
+  transform-origin: 30% 75%;
+  text-shadow: 0 0 calc(6 * var(--rp)) rgba(0, 0, 0, 0.45);
+}
+
+/* Permanent Marker is wider and heavier than the reference's handwriting; squashing it gives the tall, thin strokes. */
+.hud-wave__digits {
+  display: inline-block;
+  letter-spacing: calc(2 * var(--rp));
+  transform: scaleX(0.62);
+  transform-origin: left center;
+}

@@ -1,0 +1,42 @@
+.hud-phase {
+  position: absolute;
+  left: 50%;
+  top: calc(30 * var(--rp));
+  transform: translate(-50%, calc(-8 * var(--rp)));
+  display: flex;
+  align-items: baseline;
+  gap: calc(14 * var(--rp));
+  white-space: nowrap;
+  text-transform: uppercase;
+  font-size: calc(21 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--rp));
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+.hud-phase.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.hud-phase__timer {
+  display: inline-block;
+  min-width: 2.6em;
+  text-align: center;
+  font-size: calc(24 * var(--rp));
+}
+
+.hud-phase__timer.is-warning {
+  color: #ff3a30;
+}
+
+.hud-phase__hint {
+  font-size: calc(17 * var(--rp));
+  opacity: 0.75;
+}
+
+.hud-phase__hint[hidden] {
+  display: none;
+}

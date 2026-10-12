@@ -1,0 +1,50 @@
+/*
+ * Sits where the magazine and reserve numbers do (offsets from the .hud-br anchor, the ammo divider's foot),
+ * over the ammo smear, which stays in place.
+ */
+.hud-heat {
+  position: absolute;
+  left: calc(-128 * var(--rp));
+  bottom: calc(18 * var(--rp));
+  width: calc(178 * var(--rp));
+  height: calc(12 * var(--rp));
+}
+
+.hud-heat[hidden] {
+  display: none;
+}
+
+.hud-heat__track {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 8, 8, 0.45);
+  box-shadow: 0 0 calc(5 * var(--rp)) rgba(0, 0, 0, 0.45), inset 0 0 0 calc(1 * var(--rp)) rgba(236, 230, 218, 0.35);
+  overflow: hidden;
+}
+
+.hud-heat__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--hud-white);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.hud-heat.is-hot .hud-heat__fill {
+  background: #ffb15a;
+}
+
+.hud-heat.is-overheated .hud-heat__fill {
+  background: #ff3a30;
+  animation: hud-heat-flash 0.3s steps(1, end) infinite;
+}
+
+/* Red and white in turn, so the lock reads even over the red smear. */
+@keyframes hud-heat-flash {
+  0% {
+    background: #ff3a30;
+  }
+  50% {
+    background: #fff1e0;
+  }
+}

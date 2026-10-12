@@ -1,0 +1,15 @@
+/* Pale gold like the "+10" popups in the reference, a bit smaller than the cash amount. */
+.hud-cash-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  color: #ecd982;
+  font-size: calc(18 * var(--rp));
+  font-weight: 500;
+  letter-spacing: calc(1 * var(--rp));
+  line-height: 1;
+  transform-origin: left center;
+  will-change: transform, opacity;
+}

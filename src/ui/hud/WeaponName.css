@@ -1,0 +1,12 @@
+/* Reference: centered on x 1695, cap height from y 995 to 1008. Offsets are from the .hud-br anchor. */
+.hud-weapon-name {
+  position: absolute;
+  left: calc(17 * var(--rp));
+  top: calc(13 * var(--rp));
+  transform: translateX(-50%);
+  font-size: calc(17 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(0.5 * var(--rp));
+  line-height: 1;
+  white-space: nowrap;
+}
