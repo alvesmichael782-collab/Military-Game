@@ -1,3 +1,4 @@
+import { profiler } from '../core/FrameProfiler';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { Vector3, type Scene } from 'three';
 import { CORE_SIZE } from '../build/OutpostCore';
@@ -231,7 +232,9 @@ export class EnemyManager {
     if (!this._frozen) {
       this.time += dt;
       this.updateRepath(dt);
+      profiler.begin('path');
       this.runPathQueue();
+      profiler.end('path');
       const interval = config.enemies.thinkInterval;
       for (const enemy of this.all) {
         if (!enemy.active) continue;

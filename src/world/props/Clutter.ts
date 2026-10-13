@@ -1,7 +1,7 @@
 import { BoxGeometry, BufferGeometry, CylinderGeometry, PlaneGeometry } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { shadeKind, type InstanceKind, type PropBuilder } from '../PropBuilder';
-import { PropMaterials } from '../PropMaterials';
+import { forInstances, PropMaterials } from '../PropMaterials';
 import { createRandom } from '../random';
 
 /*
@@ -25,11 +25,11 @@ function getKinds(): NonNullable<typeof kinds> {
   const crate = shadeKind(new BoxGeometry(CRATE, CRATE, CRATE).translate(0, CRATE / 2, 0), 1, 0.62, 1);
   const barrel = shadeKind(new CylinderGeometry(BARREL_RADIUS, BARREL_RADIUS, BARREL_HEIGHT, 12).translate(0, BARREL_HEIGHT / 2, 0), 1, 0.62, 0.9);
   kinds = {
-    crate: { name: 'crates', geometry: crate, material: PropMaterials.crate() },
-    barrel: { name: 'barrels', geometry: barrel, material: PropMaterials.barrel() },
-    bag: { name: 'sandbags', geometry: sandbagGeometry(), material: PropMaterials.burlap() },
-    shrub: { name: 'shrubs', geometry: shrubGeometry(), material: PropMaterials.shrub() },
-    pole: { name: 'poles', geometry: poleGeometry(), material: PropMaterials.pole() },
+    crate: { name: 'crates', geometry: crate, material: forInstances(PropMaterials.crate()) },
+    barrel: { name: 'barrels', geometry: barrel, material: forInstances(PropMaterials.barrel()) },
+    bag: { name: 'sandbags', geometry: sandbagGeometry(), material: forInstances(PropMaterials.burlap()) },
+    shrub: { name: 'shrubs', geometry: shrubGeometry(), material: forInstances(PropMaterials.shrub()) },
+    pole: { name: 'poles', geometry: poleGeometry(), material: forInstances(PropMaterials.pole()) },
   };
   return kinds;
 }

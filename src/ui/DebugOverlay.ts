@@ -1,4 +1,5 @@
 import { config } from '../core/config';
+import type { FrameProfile } from '../core/FrameProfiler';
 import { Phase } from '../core/GameState';
 
 export interface DebugOverlayState {
@@ -55,8 +56,12 @@ export interface DebugOverlayState {
   mgMounted: boolean;
   mgHeat: number;
   mgOverheated: boolean;
-  /** Show the centered "Click to play" prompt. */
-  showClickPrompt: boolean;
+  /** Frame time split (ms, averaged), draw calls and triangles last frame, JS heap in MB, stress test running. */
+  profile: Readonly<FrameProfile>;
+  drawCalls: number;
+  triangles: number;
+  heapMB: number;
+  stress: boolean;
 }
 
 /** "KeyQ" -> "Q", "Mouse2" -> "Right mouse". */
@@ -74,7 +79,7 @@ const HELP =
   'K: 25 damage   M: earn $50   U: refill ammo and grenades   N: end the wave (in a fight) or next phase   L: force loss\n' +
   'J: 25% damage to the structure under the crosshair\n' +
   '7: spawn rifleman   8: spawn sapper   9: kill all enemies   0: freeze or unfreeze enemy AI\n' +
-  'F1: debug camera   F3: toggle this overlay   F4: enemy paths, breach targets and states   F6: retro filter on or off';
+  'F1: debug camera   F3: toggle this overlay   F4: enemy paths, breach targets and states   F6: retro filter on or off   F8: save the playtest log';
 
 /** Spawn points by where they sit on the map (config.map.spawnPoints), e.g. "N" for the north one. */
 function spawnName(index: number): string {
@@ -156,9 +161,15 @@ export class DebugOverlay {
     this.root.style.display = this.visible ? 'none' : 'block';
   }
 
+  /** Show or hide the centered "Click to play" prompt. Works with the overlay hidden. */
+  setClickPrompt(shown: boolean): void {
+    const display = shown ? 'block' : 'none';
+    if (this.prompt.style.display !== display) this.prompt.style.display = display;
+  }
+
   update(state: DebugOverlayState): void {
-    this.prompt.style.display = state.showClickPrompt ? 'block' : 'none';
     if (!this.visible) return;
+    const p = state.profile;
     const timer = state.phase === Phase.WON || state.phase === Phase.LOST ? '--:--' : formatTime(state.timeRemaining);
     const text =
       `PHASE ${state.phase.padEnd(9)}  WAVE ${state.wave}/${state.totalWaves}  ` +
@@ -179,7 +190,11 @@ export class DebugOverlay {
       `\nWAVE BUDGET ${state.waveBudgetLeft}/${state.waveBudget}  QUEUED ${state.enemiesQueued}` +
       `  SPAWNS ${state.activeSpawnPoints.map(spawnName).join('+') || '-'}` +
       `\nMG ${state.mgMounted ? 'MOUNTED' : 'OFF'}  HEAT ${String(Math.round(state.mgHeat * 100)).padStart(3)}%` +
-      (state.mgOverheated ? '  [OVERHEATED]' : '');
+      (state.mgOverheated ? '  [OVERHEATED]' : '') +
+      `\nFRAME ${p.frame.toFixed(1)} ms (worst ${p.worstFrame.toFixed(1)})  CPU ${p.cpu.toFixed(1)}: RENDER ${p.render.toFixed(1)}` +
+      `  PHYSICS ${p.physics.toFixed(1)}  AI ${p.ai.toFixed(1)}  PATHS ${p.path.toFixed(1)}  REST ${p.rest.toFixed(1)}` +
+      `\nDRAW CALLS ${state.drawCalls}  TRIANGLES ${state.triangles}  HEAP ${state.heapMB.toFixed(0)} MB` +
+      (state.stress ? '  [STRESS TEST]' : '');
     // Only touch the DOM when the text actually changes.
     if (text !== this.lastText) {
       this.status.textContent = text;

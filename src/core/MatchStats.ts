@@ -30,7 +30,9 @@ export class MatchStats {
         this.total.headshots++;
       }
     });
-    events.on('cashEarned', ({ amount }) => {
+    events.on('cashEarned', ({ amount, reason }) => {
+      // Refunds for removed structures give back cash already spent; they are not earnings.
+      if (reason === 'refund') return;
       this.wave.cashEarned += amount;
       this.total.cashEarned += amount;
     });

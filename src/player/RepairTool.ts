@@ -156,7 +156,7 @@ export class RepairTool {
     const step = Math.max(1, Math.min(config.repair.chargeStep, owed));
     const affordable = Math.min(step, Math.floor(this.cash));
     // Spending what cannot be afforded reports `cashInsufficient`, which flashes the HUD cash counter.
-    if (!this.purse.spend(affordable >= 1 ? affordable : step)) return false;
+    if (!this.purse.spend(affordable >= 1 ? affordable : step, 'repair')) return false;
     this.credit += affordable;
     return true;
   }

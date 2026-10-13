@@ -4,7 +4,7 @@ import { config } from './config';
 export type Action = keyof typeof config.keybinds;
 
 /** Keys whose browser default (help page, page scroll, focus change) must never fire in game. */
-const ALWAYS_PREVENT = new Set(['F1', 'F3', 'F4', 'F6', 'Space', 'Tab']);
+const ALWAYS_PREVENT = new Set(['F1', 'F3', 'F4', 'F6', 'F8', 'F9', 'Space', 'Tab']);
 
 /**
  * Central input state. Keys are keyed by `KeyboardEvent.code` (layout independent, e.g. "KeyW").

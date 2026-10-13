@@ -199,8 +199,8 @@ Work on one milestone at a time. Each must be tested and working before moving o
 
 ## Completed Milestones
 
-M1 Foundations, M2 Player controller, M3 Rifle and grenades, HUD overhaul, M4 Build mode (edge-based walls with lips and joints), Sound system, M5 Destruction, M6 Enemies, Aim down sights, Reload animation, M7 Waves and MG nest
+M1 Foundations, M2 Player controller, M3 Rifle and grenades, HUD overhaul, M4 Build mode (edge-based walls with lips and joints), Sound system, M5 Destruction, M6 Enemies, Aim down sights, Reload animation, M7 Waves and MG nest, M8 Art and retro pass
 
 ## Current Milestone
 
-M8 Art and retro pass
+M9 Tune and playtest

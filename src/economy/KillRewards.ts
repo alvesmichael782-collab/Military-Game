@@ -10,6 +10,6 @@ export function connectKillRewards(events: EventBus<GameEvents>, wallet: CashWal
   events.on('enemyKilled', ({ type, source, headshot }) => {
     if (source !== 'player') return;
     const rewards = config.economy.killRewards;
-    wallet.earn(rewards[type] + (headshot ? rewards.headshotBonus : 0));
+    wallet.earn(rewards[type] + (headshot ? rewards.headshotBonus : 0), 'kill');
   });
 }

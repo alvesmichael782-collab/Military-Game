@@ -6,6 +6,6 @@ import type { CashWallet } from './CashWallet';
 export function connectWaveRewards(events: EventBus<GameEvents>, wallet: CashWallet): void {
   events.on('waveCleared', ({ wave }) => {
     const bonus = config.economy.waveClearBonus;
-    wallet.earn(bonus.base + bonus.perWave * wave);
+    wallet.earn(bonus.base + bonus.perWave * wave, 'waveBonus');
   });
 }

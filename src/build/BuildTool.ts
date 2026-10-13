@@ -290,14 +290,14 @@ export class BuildTool {
   private place(buildable: Buildable, facing: number, error: string | null): void {
     if (error === BuildError.CASH) {
       // The wallet refuses and reports it, so the HUD flashes the cash counter.
-      this.purse.spend(buildable.cost);
+      this.purse.spend(buildable.cost, buildable.type);
       return;
     }
     if (error !== null) {
       this.events.emit('actionDenied', {});
       return;
     }
-    if (!this.purse.spend(buildable.cost)) return;
+    if (!this.purse.spend(buildable.cost, buildable.type)) return;
     if (buildable.type === 'wall') this.structures.placeWall(this.edge, buildable.cost);
     else this.structures.placeMgNest({ ...this.vertex }, facing * QUARTER_TURN, buildable.cost);
   }
@@ -311,7 +311,7 @@ export class BuildTool {
     const refund = refundOf(structure.type);
     this.setTarget(null);
     this.structures.remove(structure, refund);
-    this.purse.earn(refund);
+    this.purse.earn(refund, 'refund');
   }
 
   private setTarget(structure: Structure | null): void {

@@ -22,6 +22,12 @@ export class PlayerArmor {
     });
   }
 
+  /** Debug (stress test): full armor at once, without using spare plates. */
+  refill(): void {
+    this._armor = this.maxArmor;
+    this.announce();
+  }
+
   get armor(): number {
     return this._armor;
   }

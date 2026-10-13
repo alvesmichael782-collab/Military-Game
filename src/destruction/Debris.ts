@@ -47,6 +47,8 @@ export class Debris {
   private readonly position = new Vector3();
   private readonly rotation = new Quaternion();
   private readonly velocity = new Vector3();
+  /** Instances drawn per kind this frame (reused every frame). */
+  private readonly counts = new Map<DebrisKind, number>();
   private readonly spawnPoint = new Vector3();
   private readonly along = new Vector3();
   private readonly away = new Vector3();
@@ -114,6 +116,13 @@ export class Debris {
         chunk.body.setEnabled(false);
         continue;
       }
+      // A chunk at rest stays put: skip reading it back (every Rapier read allocates).
+      if (chunk.body.isSleeping()) {
+        chunk.prevPosition.copy(chunk.currPosition);
+        chunk.prevRotation.copy(chunk.currRotation);
+        chunk.lastVelocity.set(0, 0, 0);
+        continue;
+      }
       const t = chunk.body.translation();
       const r = chunk.body.rotation();
       const v = chunk.body.linvel();
@@ -136,7 +145,8 @@ export class Debris {
   /** Draw every live chunk where it is between the last two physics steps. */
   render(alpha: number): void {
     const d = config.destruction.debris;
-    const counts = new Map<DebrisKind, number>();
+    const counts = this.counts;
+    counts.clear();
     for (const chunk of this.chunks) {
       if (!chunk.active) continue;
       const mesh = this.meshes.get(chunk.kind);
@@ -149,12 +159,12 @@ export class Debris {
       const fade = 1 - Math.max(0, chunk.age - d.lifetime) / d.fadeTime;
       (mesh.geometry.getAttribute(FADE_ATTRIBUTE) as InstancedBufferAttribute).setX(index, fade);
     }
-    for (const [kind, mesh] of this.meshes) {
+    this.meshes.forEach((mesh, kind) => {
       mesh.count = counts.get(kind) ?? 0;
       mesh.visible = mesh.count > 0;
       mesh.instanceMatrix.needsUpdate = true;
       mesh.geometry.getAttribute(FADE_ATTRIBUTE).needsUpdate = true;
-    }
+    });
   }
 
   /** Throw a collapse's chunks out of the structure's footprint, away from what destroyed it. */

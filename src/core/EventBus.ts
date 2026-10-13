@@ -61,6 +61,19 @@ export interface CashTransactionEvent extends CashChangedEvent {
   amount: number;
 }
 
+/** What cash was earned from. A kill's payment includes its headshot bonus. */
+export type CashEarnReason = 'kill' | 'waveBonus' | 'refund' | 'debug';
+/** What cash was spent on. */
+export type CashSpendReason = 'wall' | 'mgNest' | 'repair' | 'plate';
+
+export interface CashEarnedEvent extends CashTransactionEvent {
+  reason: CashEarnReason;
+}
+
+export interface CashSpentEvent extends CashTransactionEvent {
+  reason: CashSpendReason;
+}
+
 export interface CashInsufficientEvent {
   /** What the player tried to pay, and what they had. */
   cost: number;
@@ -444,8 +457,8 @@ export interface GameEvents {
   healthChanged: HealthChangedEvent;
   playerControlChanged: PlayerControlChangedEvent;
   cashChanged: CashChangedEvent;
-  cashEarned: CashTransactionEvent;
-  cashSpent: CashTransactionEvent;
+  cashEarned: CashEarnedEvent;
+  cashSpent: CashSpentEvent;
   cashInsufficient: CashInsufficientEvent;
   platePurchased: PlatePurchasedEvent;
   phaseTimer: PhaseTimerEvent;
@@ -518,6 +531,11 @@ type Handler<T> = (payload: T) => void;
 
 export class EventBus<Events extends object = GameEvents> {
   private readonly handlers = new Map<keyof Events, Set<Handler<never>>>();
+  /**
+   * Each event's handlers as an array, rebuilt only when they change. Dispatch walks this snapshot, so handlers
+   * may unsubscribe (or subscribe) while an event is dispatching, and emitting allocates nothing.
+   */
+  private readonly snapshots = new Map<keyof Events, Handler<never>[]>();
 
   /** Subscribe to an event. Returns an unsubscribe function. */
   on<K extends keyof Events>(type: K, handler: Handler<Events[K]>): () => void {
@@ -527,19 +545,22 @@ export class EventBus<Events extends object = GameEvents> {
       this.handlers.set(type, set);
     }
     set.add(handler as Handler<never>);
+    this.snapshots.delete(type);
     return () => this.off(type, handler);
   }
 
   off<K extends keyof Events>(type: K, handler: Handler<Events[K]>): void {
-    this.handlers.get(type)?.delete(handler as Handler<never>);
+    if (this.handlers.get(type)?.delete(handler as Handler<never>)) this.snapshots.delete(type);
   }
 
   emit<K extends keyof Events>(type: K, payload: Events[K]): void {
-    const set = this.handlers.get(type);
-    if (!set) return;
-    // Copy so handlers may unsubscribe while the event is dispatching.
-    for (const handler of [...set]) {
-      (handler as Handler<Events[K]>)(payload);
+    let list = this.snapshots.get(type);
+    if (!list) {
+      const set = this.handlers.get(type);
+      if (!set || set.size === 0) return;
+      list = [...set];
+      this.snapshots.set(type, list);
     }
+    for (let i = 0; i < list.length; i++) (list[i] as Handler<Events[K]>)(payload);
   }
 }

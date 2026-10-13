@@ -1,4 +1,5 @@
 import { config } from './config';
+import { profiler } from './FrameProfiler';
 
 export type FixedUpdate = (dt: number) => void;
 /** `alpha` is how far (0..1) render time sits between the last two fixed steps. */
@@ -37,6 +38,7 @@ export class GameLoop {
   private readonly frame = (now: number): void => {
     if (!this.running) return;
     this.rafId = requestAnimationFrame(this.frame);
+    profiler.beginFrame();
 
     const step = config.physics.step;
     // The first frame's timestamp can be earlier than `start()` ran; never step time backwards.
@@ -56,5 +58,6 @@ export class GameLoop {
     }
 
     this.render(frameDt, this.accumulator / step);
+    profiler.endFrame();
   };
 }

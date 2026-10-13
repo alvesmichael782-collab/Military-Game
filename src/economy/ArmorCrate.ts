@@ -89,7 +89,7 @@ export class ArmorCrate {
       return;
     }
     // A failed spend reports `cashInsufficient` itself, which flashes the HUD cash.
-    if (!this.purse.spend(cost)) return;
+    if (!this.purse.spend(cost, 'plate')) return;
     this.events.emit('platePurchased', { cost });
   }
 

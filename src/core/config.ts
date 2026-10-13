@@ -50,8 +50,8 @@ export const config = {
     throwDropTime: 0.45,
   },
   phases: {
-    /** Seconds per phase. Enter ends BUILD early and skips the rest of AFTERMATH. */
-    buildDuration: 60,
+    /** Seconds per phase. Enter ends BUILD early and skips the rest of AFTERMATH. A full-timer run is about 25-30 min. */
+    buildDuration: 75,
     /**
      * FIGHT has no timer: it ends once the wave director has sent the whole wave and every enemy is dead.
      * This safety timeout ends it anyway, so a stuck enemy can never softlock the game (leftover enemies are removed).
@@ -171,8 +171,8 @@ export const config = {
   rifle: {
     /** Name shown on the HUD under the ammo count. */
     displayName: 'M4',
-    /** Damage per bullet. Headshots multiply this when the target has a head zone. */
-    damage: 20,
+    /** Damage per bullet. Headshots multiply this when the target has a head zone. 4 body shots or 2 headshots kill a rifleman, 2 body shots a sapper. */
+    damage: 25,
     headshotMultiplier: 2,
     roundsPerMinute: 600,
     magazineSize: 30,
@@ -353,9 +353,12 @@ export const config = {
     spread: 0.6,
     /** Every this many rounds is a tracer. */
     tracerEvery: 3,
-    /** Heat added per shot (0..1, so 0.025 is 40 shots, 3.2 s of fire) and lost per second once not firing for `coolDelay` seconds. */
-    heatPerShot: 0.025,
-    coolRate: 0.3,
+    /**
+     * Heat added per shot (0..1, so 0.03 is 34 shots, 2.7 s of fire) and lost per second once not firing for
+     * `coolDelay` seconds. Sustained fire with pauses averages about 4.4 rounds a second, so the gun needs help.
+     */
+    heatPerShot: 0.03,
+    coolRate: 0.2,
     coolDelay: 0.2,
     /** At full heat the gun locks for this many seconds while it cools. */
     overheatLockTime: 3,
@@ -439,9 +442,9 @@ export const config = {
     startingCash: 1500,
     /** Prices, in dollars. */
     prices: {
-      wall: 100,
+      wall: 125,
       mgNest: 750,
-      armorPlate: 250,
+      armorPlate: 300,
     },
     /** Fraction of the price refunded when the player removes a structure they built. */
     refundFraction: 0.5,
@@ -451,10 +454,10 @@ export const config = {
       sapper: 200,
       headshotBonus: 50,
     },
-    /** Paid when a wave is cleared: `base` plus `perWave` times the wave number ($400 for wave 3). */
+    /** Paid when a wave is cleared: `base` plus `perWave` times the wave number ($325 for wave 3). */
     waveClearBonus: {
       base: 250,
-      perWave: 50,
+      perWave: 25,
     },
   },
   build: {
@@ -506,9 +509,12 @@ export const config = {
       damaged: 0.66,
       breached: 0.33,
     },
-    /** Structure damage per damage type, times the hit's damage. Bullets barely scratch; explosions hit in full. */
+    /**
+     * Structure damage per damage type, times the hit's damage. Bullets barely scratch (a rifle needs 100 rounds
+     * for a wall); explosions hit in full. The outpost core takes damage as it comes, without these.
+     */
     damageMultipliers: {
-      ballistic: 0.15,
+      ballistic: 0.12,
       explosive: 1,
     },
     /** Breached walls' bullet colliders leave this fraction of each hole's width and height open (the ragged rim stays solid). */
@@ -553,11 +559,11 @@ export const config = {
     /** HP restored per second. */
     rate: 80,
     /**
-     * Dollars per HP restored. A wall (300 HP) repaired from 1 HP costs about $50, half its price;
+     * Dollars per HP restored. A wall (300 HP) repaired from 1 HP costs about $63, half its price;
      * the MG nest (600 HP) about $360, about half of its $750.
      */
     cashPerHp: {
-      wall: 0.17,
+      wall: 0.21,
       mgNest: 0.6,
     },
     /** Repairs are paid up front in steps of this many dollars, so cash ticks down instead of flickering every frame. */
@@ -636,8 +642,8 @@ export const config = {
     fireInterval: 0.11,
     burstPauseMin: 0.8,
     burstPauseMax: 1.5,
-    /** Damage per hit. Goes through the player's armor plates first. */
-    damage: 8,
+    /** Damage per hit. Goes through the player's armor plates first. 3 riflemen at 25 m strip 3 full plates in about 5 s. */
+    damage: 10,
     /** Bullet range, in meters. */
     range: 120,
     /** Spread as a cone half-angle in degrees: starts wide and tightens to `aimed` over `tightenTime` seconds of aiming at one target. */
@@ -646,7 +652,7 @@ export const config = {
       aimed: 1.1,
       tightenTime: 3,
       /** Added per 10 m to the target. */
-      perTenMeters: 0.35,
+      perTenMeters: 0.2,
       /** Added when the player moves at walk speed (scales with speed). */
       targetMoving: 1.6,
     },
@@ -656,8 +662,8 @@ export const config = {
     coreShootRange: 18,
   },
   sapper: {
-    /** Less HP than a rifleman, and faster. */
-    hp: 60,
+    /** Less HP than a rifleman (2 rifle body shots), and faster. */
+    hp: 50,
     speed: 6.4,
     /** Seconds crouched planting a charge (vulnerable throughout), and how far it runs back afterwards, in meters. */
     plantTime: 1.5,
@@ -666,8 +672,11 @@ export const config = {
     satchels: 3,
   },
   satchel: {
-    /** Blast damage and radius, and the radius of full damage, in meters. */
-    damage: 350,
+    /**
+     * Blast damage and radius, and the radius of full damage, in meters. One charge breaches an intact wall
+     * (300 HP) and leaves it at 30 HP, so a little more fire brings it down.
+     */
+    damage: 270,
     radius: 4,
     fullDamageRadius: 1,
     /** Seconds from planting to the blast, and from a dead sapper dropping it to the blast. */
@@ -730,6 +739,12 @@ export const config = {
     landingPitch: 0.86,
   },
   debug: {
+    /**
+     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, L, M, N, U, 7, 8, 9, 0), the debug overlay and enemy
+     * view, the playtest log (console wave summaries, F8 and the JSON saved at game over) and the console logging.
+     * Turn off for release.
+     */
+    enabled: true,
     /** Damage dealt by the K test key. */
     testDamage: 25,
     /** Cash earned by the M test key, in dollars. */

@@ -31,6 +31,22 @@ function material(name: string, make: () => Texture, extra: Partial<ConstructorP
   return m;
 }
 
+/**
+ * The instanced-mesh copy of a prop material (same texture and settings). three.js builds a different shader for
+ * instanced meshes, so a material shared by plain and instanced meshes would switch shaders back and forth every
+ * frame; instanced props use these copies instead.
+ */
+export function forInstances(base: MeshLambertMaterial): MeshLambertMaterial {
+  const key = `${base.name}.instanced`;
+  let m = cache.get(key);
+  if (!m) {
+    m = base.clone();
+    m.name = key;
+    cache.set(key, m);
+  }
+  return m;
+}
+
 export const PropMaterials = {
   plaster: () => material('plaster', createPlasterBrickTexture),
   concrete: () => material('concrete', createConcreteTexture),

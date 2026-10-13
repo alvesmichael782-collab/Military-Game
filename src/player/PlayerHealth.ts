@@ -24,11 +24,15 @@ export class PlayerHealth implements Damageable {
     private readonly armor: PlayerArmor,
   ) {
     events.on('phaseChanged', ({ to }) => {
-      if (to === Phase.BUILD && !this.isDead) {
-        this._health = config.playerHealth.maxHealth;
-        this.announce();
-      }
+      if (to === Phase.BUILD) this.refill();
     });
+  }
+
+  /** Back to full health (each build phase, and the stress test). Never brings the dead back. */
+  refill(): void {
+    if (this.isDead) return;
+    this._health = config.playerHealth.maxHealth;
+    this.announce();
   }
 
   /** Emit the current health, e.g. so a freshly built HUD can draw it. */

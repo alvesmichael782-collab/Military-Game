@@ -24,6 +24,9 @@ import { GameLoop } from './core/GameLoop';
 import { GameState, Phase } from './core/GameState';
 import { Input } from './core/Input';
 import { MatchStats } from './core/MatchStats';
+import { PlaytestLog } from './core/PlaytestLog';
+import { profiler } from './core/FrameProfiler';
+import { StressTest } from './core/StressTest';
 import { Physics } from './core/Physics';
 import { RetroFilter } from './core/RetroFilter';
 import { Groups } from './core/CollisionGroups';
@@ -54,7 +57,14 @@ import { BuildGrid } from './world/BuildGrid';
 import { createDustRidge } from './world/DustRidge';
 import { createLighting } from './world/Lighting';
 import { createMapProps } from './world/MapProps';
+import { separateInstancedShadowDepth } from './world/ShadowDepth';
 import { SpawnSmoke } from './world/SpawnSmoke';
+
+/** Used JS heap in MB, where the browser reports it (Chrome), else 0. */
+function heapMegabytes(): number {
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+  return memory ? memory.usedJSHeapSize / 1048576 : 0;
+}
 
 function createRenderer(): WebGLRenderer {
   const renderer = new WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -64,6 +74,8 @@ function createRenderer(): WebGLRenderer {
   renderer.shadowMap.type = PCFShadowMap;
   // Cleared by hand so the view model can be drawn over the world with fresh depth.
   renderer.autoClear = false;
+  // Draw calls and triangles add up over the frame's passes (shadows, world, view model, upscale); reset per frame.
+  renderer.info.autoReset = false;
   document.body.append(renderer.domElement);
   return renderer;
 }
@@ -93,6 +105,7 @@ async function boot(): Promise<void> {
   connectEnemySounds(events, sounds);
   connectMgSounds(events, sounds);
   const stats = new MatchStats(events);
+  const playtestLog = config.debug.enabled ? new PlaytestLog(events) : null;
 
   const grid = new BuildGrid();
   // Spawn pads are never buildable (their pad radius is 3 m), but enemies walk off them.
@@ -163,6 +176,7 @@ async function boot(): Promise<void> {
   const mount = new MgMount(events, structures, player);
   const mg = new MachineGun(events, physics.world, registry);
   const enemyDebug = new EnemyDebugView(scene, enemies);
+  const stress = config.debug.enabled ? new StressTest({ grid, structures, enemies, explosions, health, armor }) : null;
   connectKillRewards(events, wallet);
   connectWaveRewards(events, wallet);
   // Give the freshly built HUD its starting values.
@@ -195,18 +209,14 @@ async function boot(): Promise<void> {
   const aimedInfo = (target: Structure | null): DebugOverlayState['aimed'] =>
     target && { type: target.type, id: target.id, hp: target.hp, maxHp: target.maxHp, state: structures.stateOf(target) };
 
-  events.on('phaseChanged', ({ from, to, wave }) => {
-    console.info(`[phase] ${from ?? 'START'} -> ${to} (wave ${wave})`);
-  });
-  events.on('playerDamaged', ({ amount, armor: ap, health: hp }) => {
-    console.info(`[player] took ${amount} damage, armor ${Math.ceil(ap)}, health ${Math.ceil(hp)}`);
-  });
-  events.on('plateApplied', ({ armor: ap, spares }) => {
-    console.info(`[player] plate applied, armor ${ap}, spares ${spares}`);
-  });
-  events.on('playerDied', () => console.info('[player] died'));
-  events.on('waveStarted', ({ wave, budget }) => console.info(`[waves] wave ${wave} started, budget ${budget}`));
-  events.on('waveCleared', ({ wave }) => console.info(`[waves] wave ${wave} cleared`));
+  if (config.debug.enabled) {
+    events.on('phaseChanged', ({ from, to, wave }) => {
+      console.info(`[phase] ${from ?? 'START'} -> ${to} (wave ${wave})`);
+    });
+    events.on('playerDied', () => console.info('[player] died'));
+    events.on('waveStarted', ({ wave, budget }) => console.info(`[waves] wave ${wave} started, budget ${budget}`));
+    events.on('waveCleared', ({ wave }) => console.info(`[waves] wave ${wave} cleared`));
+  }
   // The win and lose screens need the mouse back.
   events.on('gameOver', () => input.exitPointerLock());
 
@@ -237,14 +247,21 @@ async function boot(): Promise<void> {
 
   const fixedUpdate = (dt: number): void => {
     state.update(dt);
+    profiler.begin('physics');
     player.fixedUpdate(dt, fpsCamera.yaw);
+    profiler.end('physics');
+    profiler.begin('ai');
     enemies.fixedUpdate(dt);
+    profiler.end('ai');
+    profiler.begin('physics');
     physics.step();
     grenades.fixedUpdate(dt);
     debris.fixedUpdate(dt);
+    profiler.end('physics');
   };
 
-  const render = (frameDt: number, alpha: number): void => {
+  /** The test keys. Only while `config.debug.enabled`. */
+  const handleDebugKeys = (): void => {
     if (input.wasPressed('F1')) toggleDebugView();
     if (input.wasPressed('KeyK')) applyDamage(health, config.debug.testDamage, 'ballistic', player.position);
     if (input.wasPressed('KeyU')) {
@@ -257,24 +274,30 @@ async function boot(): Promise<void> {
       else state.skipPhase();
     }
     if (input.wasPressed('KeyL')) state.lose();
-    if (input.wasPressed('KeyM')) wallet.earn(config.debug.testCash);
+    if (input.wasPressed('KeyM')) wallet.earn(config.debug.testCash, 'debug');
     if (input.wasPressed('F3')) overlay.toggle();
     if (input.wasPressed('F4')) enemyDebug.toggle();
     if (input.wasPressed('F6')) retro.toggle();
+    if (input.wasPressed('F8')) playtestLog?.download();
+    if (input.wasPressed('F9')) stress?.toggle();
     if (input.wasPressed('Digit7')) enemies.spawn('rifleman');
     if (input.wasPressed('Digit8')) enemies.spawn('sapper');
     if (input.wasPressed('Digit9')) enemies.killAll();
     if (input.wasPressed('Digit0')) enemies.toggleFreeze();
-    if (input.wasPressed('Enter')) {
-      if (state.phase === Phase.BUILD) state.startWaveEarly();
-      else if (state.phase === Phase.AFTERMATH) state.skipAftermath();
-      else if (state.isOver) window.location.reload();
-    }
     if (input.wasPressed('KeyJ')) {
       const target = structureUnderCrosshair();
       // Explosive damage, scaled back so the structure loses exactly the set fraction of its max HP.
       const amount = target ? (target.maxHp * config.debug.structureDamageFraction) / config.destruction.damageMultipliers.explosive : 0;
       if (target) applyDamage(target, amount, 'explosive', fpsCamera.camera.position);
+    }
+  };
+
+  const render = (frameDt: number, alpha: number): void => {
+    if (config.debug.enabled) handleDebugKeys();
+    if (input.wasPressed('Enter')) {
+      if (state.phase === Phase.BUILD) state.startWaveEarly();
+      else if (state.phase === Phase.AFTERMATH) state.skipAftermath();
+      else if (state.isOver) window.location.reload();
     }
 
     // Once the game is won or lost the player has no control (the end screen is up and the mouse is released).
@@ -344,9 +367,12 @@ async function boot(): Promise<void> {
 
     grenades.render(alpha);
     debris.render(alpha);
+    stress?.update(frameDt);
+    profiler.begin('ai');
     director.update(frameDt);
-    smoke.update(frameDt);
     enemies.update(frameDt, alpha);
+    profiler.end('ai');
+    smoke.update(frameDt);
     enemyDebug.update();
     effects.update(frameDt);
 
@@ -354,6 +380,8 @@ async function boot(): Promise<void> {
     sounds.setListener(fpsCamera.camera.position, listenerForward, fpsCamera.camera.up);
 
     if (debugView) debugCamera.update();
+    profiler.begin('render');
+    renderer.info.reset();
     retro.begin();
     renderer.render(scene, debugView ? debugCamera.camera : fpsCamera.camera);
     if (!debugView) {
@@ -361,10 +389,13 @@ async function boot(): Promise<void> {
       renderer.render(weapons.viewModel.scene, weapons.viewModel.camera);
     }
     retro.end();
+    profiler.end('render');
 
     fps.tick(frameDt);
     hud.update(frameDt);
-    overlay.update({
+    overlay.setClickPrompt(!debugView && !input.pointerLocked && !state.isOver);
+    // The readout is only built while the overlay is up, so a hidden overlay costs nothing per frame.
+    if (overlay.visible) overlay.update({
       phase: state.phase,
       wave: state.wave,
       totalWaves: config.waves.total,
@@ -408,19 +439,26 @@ async function boot(): Promise<void> {
       mgMounted: mount.mounted,
       mgHeat: mg.heatLevel,
       mgOverheated: mg.isOverheated,
-      showClickPrompt: !debugView && !input.pointerLocked && !state.isOver,
+      profile: profiler.profile,
+      drawCalls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      heapMB: heapMegabytes(),
+      stress: stress?.active ?? false,
     });
   };
 
   // Dev-only handle for automated playtests and console poking. Stripped from production builds.
   if (import.meta.env.DEV) {
     Object.assign(window, {
-      __game: { retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
+      __game: { applyDamage, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
     });
   }
 
+  // Everything is built: keep each shadow depth material on one shader (see ShadowDepth.ts).
+  separateInstancedShadowDepth(scene);
   state.start();
   new GameLoop(fixedUpdate, render).start();
+  if (stress && new URLSearchParams(window.location.search).has('stress')) stress.toggle();
 }
 
 boot().catch((error: unknown) => {
