@@ -16,7 +16,6 @@ export class Input {
   private readonly pressed = new Set<string>();
   private _mouseDeltaX = 0;
   private _mouseDeltaY = 0;
-  private _wheelSteps = 0;
   private _pointerLocked = false;
 
   constructor(target: Window = window) {
@@ -45,13 +44,11 @@ export class Input {
       this._mouseDeltaX += e.movementX;
       this._mouseDeltaY += e.movementY;
     });
-    // One step per wheel notch (or trackpad swipe event), down/toward the user positive.
+    // The wheel does nothing in game; just keep it from scrolling the page while the mouse is captured.
     document.addEventListener(
       'wheel',
       (e) => {
-        if (!this._pointerLocked) return;
-        e.preventDefault();
-        if (e.deltaY !== 0) this._wheelSteps += Math.sign(e.deltaY);
+        if (this._pointerLocked) e.preventDefault();
       },
       { passive: false },
     );
@@ -91,9 +88,9 @@ export class Input {
     return this._mouseDeltaY;
   }
 
-  /** Mouse wheel notches this frame: positive scrolled down, negative up. Only counts while the pointer is locked. */
-  get wheelSteps(): number {
-    return this._wheelSteps;
+  /** Cycle steps pressed this frame from `keybinds.cyclePrev` / `cycleNext`: +1 next, -1 previous, 0 neither or both. */
+  get cycleSteps(): number {
+    return (this.wasActionPressed('cycleNext') ? 1 : 0) - (this.wasActionPressed('cyclePrev') ? 1 : 0);
   }
 
   get pointerLocked(): boolean {
@@ -117,6 +114,5 @@ export class Input {
     this.pressed.clear();
     this._mouseDeltaX = 0;
     this._mouseDeltaY = 0;
-    this._wheelSteps = 0;
   }
 }

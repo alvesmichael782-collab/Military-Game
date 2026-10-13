@@ -9,7 +9,7 @@ const TAIL_CROSSFADE_MS = 10;
 const RELOAD_STOP_FADE_MS = 40;
 
 /**
- * Plays the player's weapon, grenade and explosion sounds from combat events. Weapon events carry the
+ * Plays the player's weapon (guns and knife), grenade and explosion sounds from combat events. Weapon events carry the
  * weapon's sound ids, so any gun plays its own set with no changes here. The player's gun plays flat (2D).
  */
 export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundBank): void {
@@ -18,6 +18,7 @@ export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundB
   let reload: SoundHandle = 0;
 
   events.on('weaponFired', ({ sounds: set }) => {
+    if (!set.fire) return;
     lastShot = sounds.play(set.fire);
     lastShotAt = performance.now();
   });
@@ -27,10 +28,10 @@ export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundB
     const offset = (performance.now() - lastShotAt) / 1000;
     sounds.stop(lastShot, TAIL_CROSSFADE_MS);
     lastShot = 0;
-    sounds.play(set.fireTail, offset > 0.005 ? { offset, fadeIn: TAIL_CROSSFADE_MS } : undefined);
+    if (set.fireTail) sounds.play(set.fireTail, offset > 0.005 ? { offset, fadeIn: TAIL_CROSSFADE_MS } : undefined);
   });
   events.on('weaponReloadStarted', ({ sounds: set }) => {
-    reload = sounds.play(set.reload);
+    if (set.reload) reload = sounds.play(set.reload);
   });
   events.on('weaponReloadCancelled', () => {
     sounds.stop(reload, RELOAD_STOP_FADE_MS);
@@ -41,6 +42,14 @@ export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundB
   });
   events.on('weaponEquipped', ({ sounds: set }) => {
     if (set.equip) sounds.play(set.equip);
+  });
+  events.on('meleeSwung', ({ attack, sounds: set }) => {
+    const id = attack === 'stab' ? set.stab : set.slash;
+    if (id) sounds.play(id);
+  });
+  events.on('meleeHit', ({ surface, sounds: set }) => {
+    const id = surface === 'flesh' || surface === 'target' ? set.hitBody : set.hitHard;
+    if (id) sounds.play(id);
   });
   events.on('grenadeBounced', ({ position }) => sounds.play('grenade.bounce', { position }));
   events.on('explosion', ({ position, kind }) => {

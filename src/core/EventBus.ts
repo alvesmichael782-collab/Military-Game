@@ -6,7 +6,7 @@ import type { StructureType } from '../build/Buildables';
 import type { DamageState } from '../destruction/DamageState';
 import type { EnemyCallout, EnemyType } from '../enemies/EnemyType';
 import type { Cell, Edge } from '../world/BuildGrid';
-import type { WeaponSoundSet } from '../player/weapons/Weapon';
+import type { SlotType, WeaponSounds } from '../player/weapons/defs/WeaponDef';
 import type { Phase } from './GameState';
 
 export interface PhaseChangedEvent {
@@ -64,7 +64,7 @@ export interface CashTransactionEvent extends CashChangedEvent {
 /** What cash was earned from. A kill's payment includes its headshot bonus. */
 export type CashEarnReason = 'kill' | 'waveBonus' | 'refund' | 'debug';
 /** What cash was spent on. */
-export type CashSpendReason = 'wall' | 'mgNest' | 'repair' | 'plate';
+export type CashSpendReason = 'wall' | 'mgNest' | 'weaponCrate' | 'repair' | 'plate' | 'weapon' | 'ammo';
 
 export interface CashEarnedEvent extends CashTransactionEvent {
   reason: CashEarnReason;
@@ -209,6 +209,15 @@ export type InteractPromptEvent =
   /** Looking at the armor crate. `error` is why buying would fail right now, or null. */
   | { mode: 'armorCrate'; cost: number; error: string | null };
 
+/** The weapon crate's "press E" prompt. */
+export type ShopPromptEvent =
+  | { mode: 'hidden' }
+  /**
+   * Looking at the weapon crate with `item` (a weapon's display name) selected: buy it, or refill it when it is
+   * already carried. `error` is why it would fail right now, or null.
+   */
+  | { mode: 'weaponCrate'; item: string; action: 'buy' | 'refill'; cost: number; error: string | null };
+
 export interface PlayerControlChangedEvent {
   /** True while the player has the mouse captured and is in control (alive, no debug camera). */
   active: boolean;
@@ -233,14 +242,53 @@ export interface DamageDealtEvent {
 }
 
 export interface WeaponEvent {
+  /** The weapon's def id. */
   weapon: string;
   /** The weapon's sound ids. */
-  sounds: Readonly<WeaponSoundSet>;
+  sounds: Readonly<WeaponSounds>;
 }
 
 export interface WeaponFiredEvent extends WeaponEvent {
   /** World position of the muzzle. Only valid while the event dispatches; copy to keep. */
   muzzle: Vector3;
+  /** This shot's recoil, in degrees: the climb, and sideways (positive left). */
+  kickUp: number;
+  kickSide: number;
+}
+
+/** A weapon is being drawn into the player's hands (after a switch, a purchase, or putting the build tool away). */
+export interface WeaponEquippedEvent extends WeaponEvent {
+  displayName: string;
+  kind: SlotType;
+  /** Slot index: 0 and 1 the guns, 2 the melee weapon. */
+  slot: number;
+}
+
+/** The player paid for a weapon at the weapon crate; the loadout places it (or refills it if already carried). */
+export interface WeaponPurchasedEvent {
+  weapon: string;
+  displayName: string;
+  cost: number;
+  refill: boolean;
+}
+
+/** What the player carries, after any change. */
+export interface LoadoutChangedEvent {
+  /** Weapon def id per slot (gun 1, gun 2, melee), null when empty. */
+  slots: readonly (string | null)[];
+  /** The slot the player has selected. */
+  current: number;
+}
+
+export interface MeleeSwungEvent extends WeaponEvent {
+  attack: 'slash' | 'stab';
+}
+
+export interface MeleeHitEvent extends MeleeSwungEvent {
+  /** Where the blade struck, and the surface normal. Only valid while the event dispatches; copy to keep. */
+  point: Vector3;
+  normal: Vector3;
+  surface: ImpactSurface;
 }
 
 export interface AmmoChangedEvent {
@@ -481,18 +529,24 @@ export interface GameEvents {
   buildToolChanged: BuildToolChangedEvent;
   buildPromptChanged: BuildPromptEvent;
   interactPromptChanged: InteractPromptEvent;
+  shopPromptChanged: ShopPromptEvent;
   /** The player tried something the current prompt said they cannot do (place, buy). */
   actionDenied: Record<string, never>;
   damageDealt: DamageDealtEvent;
   weaponFired: WeaponFiredEvent;
   weaponReloadStarted: WeaponEvent;
-  /** A reload stopped before it finished (the build tool came out, or a debug refill). */
+  /** A reload stopped before it finished (the weapon was switched or put away, or refilled). */
   weaponReloadCancelled: WeaponEvent;
   weaponDryFired: WeaponEvent;
   /** The trigger was let go after firing, or the shot just fired emptied the magazine. */
   weaponBurstEnded: WeaponEvent;
-  /** The weapon came back out, e.g. when the build tool is put away. */
-  weaponEquipped: WeaponEvent;
+  weaponEquipped: WeaponEquippedEvent;
+  weaponPurchased: WeaponPurchasedEvent;
+  loadoutChanged: LoadoutChangedEvent;
+  /** A knife attack started. */
+  meleeSwung: MeleeSwungEvent;
+  /** A knife attack struck something (its damage goes through `applyDamage` as usual). */
+  meleeHit: MeleeHitEvent;
   ammoChanged: AmmoChangedEvent;
   weaponSpreadChanged: WeaponSpreadChangedEvent;
   adsChanged: AdsChangedEvent;

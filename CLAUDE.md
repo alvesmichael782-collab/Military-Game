@@ -36,15 +36,15 @@ Open and look at these images before any art, map, weapon, enemy, or UI work. Th
 The MVP includes ONLY:
 
 - One map: Dust Ridge (flat desert, 200 x 200 m, 2 enemy spawn points)
-- Player: first-person movement, armor plates plus health, hitscan rifle, frag grenades, repair tool
+- Player: first-person movement, armor plates plus health, hitscan guns and a knife (see "Weapons and Loadout"), frag grenades, repair tool
 - Build mode: first-person placement (aim at the ground, ghost preview, place), 2 m snap grid, one wall type, outpost core, one MG nest
 - Destruction: wall segments with 4 damage states (intact, damaged, breached, collapsed), debris, rubble
 - Enemies: riflemen and sappers
 - Waves: 10 waves, build -> fight -> aftermath loop; win after wave 10, lose if the core is destroyed
-- Cash economy: earned from kills, spent on building, repairs, and armor plates
+- Cash economy: earned from kills, spent on building, repairs, armor plates, and weapons
 - The HUD from `UI-Model.jpg` (see HUD Spec) and a retro render filter
 
-Do NOT add: non-first-person cameras (top-down, third-person, spectator), vehicles, tanks, extra weapons, extra wall tiers, extra enemy types, perks, power-ups, menus beyond the basics, or any feature not listed above unless explicitly asked.
+Do NOT add: non-first-person cameras (top-down, third-person, spectator), vehicles, tanks, extra wall tiers, extra enemy types, perks, power-ups, menus beyond the basics, or any feature not listed above unless explicitly asked.
 
 ## Player Health and Armor Plates
 
@@ -58,12 +58,34 @@ There is no shield. The player has **armor plates** and **health**.
 - Health is 100, does not regenerate during a fight, and refills to full at the start of each build phase.
 - Events: `armorChanged`, `plateApplied`, `platePurchased`, `playerDamaged`, `playerDied`.
 
+## Weapons and Loadout
+
+Every weapon is one data file in `src/player/weapons/defs/` (stats, price, fire mode, recoil pattern, ADS sights, reload key times, view model pose, hand grips, sound IDs) plus its converted model. Adding a weapon needs only a new def file and its model; defs are found automatically. Source models live in `Models/Weapons/` and are converted with `npm run convert:weapons` (`scripts/convert-weapons/`) into `src/assets/models/weapons/<id>.glb` and `src/assets/textures/weapons/<id>.png` (color texture only, 512 px, 256 px for small items; models over about 8,000 triangles are simplified). The MG nest gun (`Models/Weapons/AR's/MG`) is not part of this.
+
+**Slots:** slot 1 (gun), slot 2 (gun), slot 3 (melee), on keys 1, 2, 3 (`config.keybinds.slot1..3`, rebindable). The player spawns with only the starting pistol (`config.weapons.startingWeapon`) in slot 1.
+
+**Buying a gun** (`src/player/weapons/Loadout.ts`):
+- Already carried: that gun's magazine and reserve are refilled (at its `refillPrice`); nothing moves.
+- One gun carried: the new gun goes into slot 1, the old one moves to slot 2.
+- Both gun slots full: the new gun replaces the gun in hand, in that slot; the other stays. With the knife in hand, it replaces the gun in the slot used last.
+- The new gun is drawn.
+
+**Buying a knife** always puts it in slot 3 (replacing any knife there) and draws it. Pressing 3 with no knife does nothing.
+
+**Switching:** holster the current weapon, then draw the next (per weapon `holsterTime` + `drawTime`, about 0.4-0.6 s). Each gun keeps its own magazine and reserve. Switching cancels reload and ADS. No switching while mounted on the MG, building, repairing, or plating. The HUD's weapon name and ammo follow the weapon in hand; the knife hides the ammo numbers. Events: `weaponEquipped`, `weaponPurchased`, `loadoutChanged`.
+
+**Weapon crate:** a buildable, temporary shop ("WEAPON CRATE" in the build tool, after the MG nest): one cell, price and limit in config (`economy.prices.weaponCrate`, `build.maxWeaponCrates`), olive crate stenciled "ARMS", not damageable, F removes it. In any phase, look at it within `config.weaponCrate.useRange`: a small copy of the selected weapon turns above it, the left and right arrow keys (`config.keybinds.cyclePrev` / `cycleNext`) cycle every weapon (cheapest first), and E buys it (or refills a carried gun) through the CashWallet and the rules above. E stays context-sensitive with the armor crate, repairs and the MG nest (closest target wins).
+
+**Knife:** tap to slash (alternating sides), hold to stab; hits through `applyDamage` with source `player` and type `melee`. Walls take `config.destruction.damageMultipliers.melee` of it (very little). No ADS.
+
+**Moving parts** are animated only where the model has them as separate meshes, or as a rigid piece rigged to its own bone (the converter splits out the triangles bound to that bone, see `parts.*.bones` in `scripts/convert-weapons/weapons.mjs`). Today: magazines, and the SG-09 slide (cycles per shot, locks back on empty, released by the empty reload). Guns without a magazine part use hand-only reloads; the revolver uses tilt-and-load.
+
 ## Cash Economy
 
 The player earns **cash**, never "points" or "salvage". Cash is always shown with a dollar sign.
 
 - Earned from kills (rifleman $100, sapper $200, headshot bonus +$50) and a wave-clear bonus. All values in config.
-- Spent on walls, repairs, the MG nest, and armor plates.
+- Spent on walls, repairs, the MG nest, armor plates, the weapon crate, and weapons and ammo bought from it.
 - Events: `cashEarned`, `cashSpent`.
 
 ## Visual Style (2001-2004 shooters)
@@ -157,10 +179,10 @@ References/          // reference images (read-only, never ship these)
 ## Architecture Rules
 
 - Systems communicate through the **EventBus** (e.g., `phaseChanged`, `segmentDamaged`, `segmentDestroyed`, `enemyKilled`, `waveCleared`, `coreDestroyed`, `cashEarned`, `armorChanged`). Avoid systems importing and calling each other directly.
-- All damage goes through one function: `applyDamage(target, amount, type, position)`. Damage types: `ballistic`, `explosive`.
+- All damage goes through one function: `applyDamage(target, amount, type, position)`. Damage types: `ballistic`, `explosive`, `melee`.
 - Game phases are managed by a single state machine: `BUILD -> FIGHT -> AFTERMATH -> BUILD`, plus `WON` and `LOST`.
 - Physics runs on a fixed 60 Hz step, separate from the render loop.
-- Tunable numbers (HP, damage, armor, prices, cash rewards, timers, wave budgets) live in one config file: `src/core/config.ts`.
+- Tunable numbers (HP, damage, armor, prices, cash rewards, timers, wave budgets) live in one config file: `src/core/config.ts`. The exception is per-weapon stats, which live in each weapon's def file (see "Weapons and Loadout").
 - The HUD only listens to events; it never reads or changes game state directly.
 - Keep files small and focused. One class or system per file where practical.
 
@@ -199,8 +221,4 @@ Work on one milestone at a time. Each must be tested and working before moving o
 
 ## Completed Milestones
 
-M1 Foundations, M2 Player controller, M3 Rifle and grenades, HUD overhaul, M4 Build mode (edge-based walls with lips and joints), Sound system, M5 Destruction, M6 Enemies, Aim down sights, Reload animation, M7 Waves and MG nest, M8 Art and retro pass
-
-## Current Milestone
-
-M9 Tune and playtest
+M1 Foundations, M2 Player controller, M3 Rifle and grenades, HUD overhaul, M4 Build mode (edge-based walls with lips and joints), Sound system, M5 Destruction, M6 Enemies, Aim down sights, Reload animation, M7 Waves and MG nest, M8 Art and retro pass, M9 Tune and playtest

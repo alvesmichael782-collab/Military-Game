@@ -14,6 +14,7 @@ import { InteractPrompt } from './InteractPrompt';
 import { MountPrompt } from './MountPrompt';
 import { PhaseBanner } from './PhaseBanner';
 import { RepairPrompt } from './RepairPrompt';
+import { ShopPrompt } from './ShopPrompt';
 import { SparePlates } from './SparePlates';
 import { WaveNumber } from './WaveNumber';
 import { WaveSummary } from './WaveSummary';
@@ -57,6 +58,7 @@ export class HudRoot {
     new InteractPrompt(events, prompts);
     new MountPrompt(events, prompts);
     new RepairPrompt(events, prompts);
+    new ShopPrompt(events, prompts);
     new PhaseBanner(events, root);
     new WaveSummary(events, root);
     new EndScreen(events, root);

@@ -41,6 +41,8 @@ export abstract class Structure implements Damageable {
   readonly colliders: RAPIER.Collider[] = [];
   /** Full size in its own frame (width x height x depth), for the removal highlight. */
   abstract readonly size: Vector3;
+  /** False for structures nothing can damage (the weapon crate): they never join the damageable registry. */
+  readonly damageable: boolean = true;
 
   constructor(
     readonly id: number,

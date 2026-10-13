@@ -8,15 +8,17 @@ import {
   Mesh,
   MeshLambertMaterial,
   Object3D,
+  Quaternion,
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { Vec3 as Vector3Like, WeaponHands } from './defs/WeaponDef';
 
 /*
- * First-person hands for the rifle, as in FPS-Model(2) and FPS-Model(3): dark olive gloves, bare forearms and
- * tan sleeves rolled to the elbow. Each arm is one small mesh built in its own frame: the hand at the origin,
- * the forearm running back along +Z to the elbow. Both are children of the rifle model, so they follow it
- * through recoil, sway and the reload tilt. Sizes are real-world meters; the rifle is about 0.75 m long.
+ * First-person hands, as in FPS-Model(2) and FPS-Model(3): dark olive gloves, bare forearms and tan sleeves
+ * rolled to the elbow. Each arm is one small mesh built in its own frame: the hand at the origin, the forearm
+ * running back along +Z to the elbow. Both are children of the weapon model in hand, so they follow it through
+ * recoil, sway and the reload tilt. Sizes are real-world meters; the M4 is about 0.75 m long.
  */
 
 const GLOVE = 0x3e4128;
@@ -24,17 +26,6 @@ const GLOVE_DARK = 0x2c2e1c;
 const SKIN = 0xb88a64;
 const SLEEVE = 0xa08860;
 const SLEEVE_ROLL = 0xb59c72;
-
-/** Where the hands hold the rifle, in the rifle model's frame (barrel along -Z, centered on its bounding box). */
-const RIGHT_GRIP = new Vector3(0.004, -0.03, 0.172);
-const LEFT_GRIP = new Vector3(-0.004, 0.044, -0.115);
-/** Where each elbow is from its hand, which sets which way the forearm runs. */
-const RIGHT_ELBOW = new Vector3(0.146, -0.17, 0.258);
-const LEFT_ELBOW = new Vector3(-0.1, -0.33, 0.21);
-/** The left hand on the magazine during a reload: offset from the magazine's top center (its pivot), and its elbow. */
-const LEFT_ON_MAG = new Vector3(-0.02, -0.075, 0.0);
-const LEFT_ON_MAG_ELBOW = new Vector3(-0.17, -0.24, 0.17);
-const X_AXIS = new Vector3(1, 0, 0);
 
 const tmpColor = new Color();
 const tmpMatrix = new Matrix4();
@@ -90,45 +81,65 @@ function armGeometry(mirror: boolean): BufferGeometry {
   return merged;
 }
 
-/** Put an arm's hand at `hand` and turn it so its forearm (+Z) runs along `toElbow`, the back of the hand up. */
-function aimArm(arm: Object3D, hand: Vector3, toElbow: Vector3): void {
-  arm.position.copy(hand);
-  tmpMatrix.lookAt(toElbow, ORIGIN, UP);
+/**
+ * Put an arm's hand at `hand` and turn it so its forearm (+Z) runs along `toElbow`, the back of the hand up, then
+ * `roll` radians about the forearm.
+ */
+function aimArm(arm: Object3D, hand: Vector3Like, toElbow: Vector3Like, roll = 0): void {
+  arm.position.set(hand.x, hand.y, hand.z);
+  tmpMatrix.lookAt(tmpElbow.set(toElbow.x, toElbow.y, toElbow.z), ORIGIN, UP);
   arm.quaternion.setFromRotationMatrix(tmpMatrix);
+  if (roll !== 0) arm.quaternion.multiply(tmpRoll.setFromAxisAngle(Z_AXIS, roll));
 }
 
 const ORIGIN = new Vector3();
+const Z_AXIS = new Vector3(0, 0, 1);
+const tmpElbow = new Vector3();
+const tmpRoll = new Quaternion();
 
 /**
- * The two arms on the rifle. The right hand stays on the pistol grip; the left hand sits under the handguard and
- * during a reload goes to the magazine, rides down with it and back up with the new one, then returns.
+ * The two gloved arms, parented to whichever weapon is in hand and placed by its def: the right hand on the grip,
+ * the left on the handguard, under the magazine or around the right hand. The reload and knife animations move
+ * the left hand through `setLeft`; a weapon without a left-hand placement keeps the left arm out of view.
  */
 export class ViewHands {
   private readonly right: Mesh;
   private readonly left: Mesh;
-  private readonly hand = new Vector3();
-  private readonly elbow = new Vector3();
-  private readonly onMag = new Vector3();
+  private hands: WeaponHands | null = null;
 
-  constructor(rifle: Object3D) {
+  constructor() {
     const material = new MeshLambertMaterial({ vertexColors: true });
     this.right = new Mesh(armGeometry(false), material);
     this.left = new Mesh(armGeometry(true), material);
     this.right.name = 'rightArm';
     this.left.name = 'leftArm';
-    rifle.add(this.right, this.left);
-    aimArm(this.right, RIGHT_GRIP, RIGHT_ELBOW);
-    aimArm(this.left, LEFT_GRIP, LEFT_ELBOW);
+  }
+
+  /** Move both arms onto `model` (a weapon's model root) and grip it as `hands` says. */
+  attach(model: Object3D, hands: WeaponHands): void {
+    this.hands = hands;
+    model.add(this.right, this.left);
+    aimArm(this.right, hands.right.grip, hands.right.elbow, hands.right.roll);
+    this.left.visible = hands.left !== undefined;
+    this.setLeft(null, null, 0);
   }
 
   /**
-   * Pose the left hand: `grab` 0 is on the handguard, 1 holding the magazine whose pivot is at `magazine`
-   * (rifle frame) tipped by `magTilt` about X.
+   * Pose the left hand: `blend` 0 is its grip from the def, 1 is at `hand` with its elbow toward `elbow` (model frame).
+   * Pass nulls for the plain grip.
    */
-  update(grab: number, magazine: Vector3, magTilt: number): void {
-    this.onMag.copy(LEFT_ON_MAG).applyAxisAngle(X_AXIS, magTilt).add(magazine);
-    this.hand.lerpVectors(LEFT_GRIP, this.onMag, grab);
-    this.elbow.lerpVectors(LEFT_ELBOW, LEFT_ON_MAG_ELBOW, grab);
-    aimArm(this.left, this.hand, this.elbow);
+  setLeft(hand: Vector3 | null, elbow: Vector3 | null, blend: number): void {
+    const grip = this.hands?.left;
+    if (!grip) return;
+    if (!hand || !elbow || blend <= 0) {
+      aimArm(this.left, grip.grip, grip.elbow, grip.roll);
+      return;
+    }
+    tmpHand.set(grip.grip.x, grip.grip.y, grip.grip.z).lerp(hand, blend);
+    tmpToElbow.set(grip.elbow.x, grip.elbow.y, grip.elbow.z).lerp(elbow, blend);
+    aimArm(this.left, tmpHand, tmpToElbow, (grip.roll ?? 0) * (1 - blend));
   }
 }
+
+const tmpHand = new Vector3();
+const tmpToElbow = new Vector3();

@@ -64,7 +64,7 @@ export class Crosshair {
   }
 
   update(dt: number): void {
-    this.spread += (this.targetSpread - this.spread) * (1 - Math.exp(-config.rifle.spread.crosshairSpeed * dt));
+    this.spread += (this.targetSpread - this.spread) * (1 - Math.exp(-config.hud.crosshairSpeed * dt));
     // Where the edge of the spread cone lands on screen.
     const spreadPx = (Math.tan(this.spread) / this.tanHalfFov) * (window.innerHeight / 2);
     const gap = Math.round(Math.min(MAX_GAP, MIN_GAP + spreadPx));

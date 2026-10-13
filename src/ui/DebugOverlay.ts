@@ -74,7 +74,7 @@ function keyName(code: string): string {
 const HELP =
   'WASD move   Shift sprint   Ctrl/C crouch   Space jump   Esc release mouse\n' +
   `Left mouse fire   ${config.ads.toggle ? 'Press' : 'Hold'} ${keyName(config.keybinds.aim)} aim   R reload   G grenade   Hold V apply armor plate   E use   Hold E repair\n` +
-  'B build tool: scroll to pick, R rotate, left mouse place, F remove or clear rubble   Enter start wave\n' +
+  `B build tool: ${keyName(config.keybinds.cyclePrev)}/${keyName(config.keybinds.cycleNext)} to pick, R rotate, left mouse place, F remove or clear rubble   Enter start wave\n` +
   'E (behind the MG nest gun) mount or dismount   Enter skip the wave summary\n' +
   'K: 25 damage   M: earn $50   U: refill ammo and grenades   N: end the wave (in a fight) or next phase   L: force loss\n' +
   'J: 25% damage to the structure under the crosshair\n' +

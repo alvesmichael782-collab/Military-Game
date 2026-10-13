@@ -5,8 +5,8 @@ import type { EnemyType } from '../enemies/EnemyType';
 
 /** Who or what hurt the player. */
 type PlayerDamageSource = 'rifleman' | 'satchel' | 'ownGrenade' | 'other';
-/** What got a kill: the player's rifle, the MG or a grenade, a satchel, or anything else. */
-type KillWeapon = 'rifle' | 'mg' | 'grenade' | 'satchel' | 'other';
+/** What got a kill: a gun in the player's hands, the knife, the MG or a grenade, a satchel, or anything else. */
+type KillWeapon = 'gun' | 'knife' | 'mg' | 'grenade' | 'satchel' | 'other';
 
 interface Split {
   armor: number;
@@ -25,11 +25,13 @@ interface WaveRecord {
     killedByPlayer: Record<EnemyType, number>;
     headshots: number;
     killsByWeapon: Record<KillWeapon, number>;
+    /** Gun kills split by gun id (m4, pistol...). */
+    killsByGun: Record<string, number>;
   };
   damageTaken: Split & { bySource: Record<PlayerDamageSource, Split> };
   plates: { applied: number; bought: number };
   cashEarned: { total: number; kills: number; headshots: number; waveBonus: number; refunds: number; debug: number };
-  cashSpent: { total: number; walls: number; mgNest: number; repairs: number; plates: number };
+  cashSpent: { total: number; walls: number; mgNest: number; repairs: number; plates: number; weapons: number; ammo: number; weaponCrate: number };
   walls: { built: number; lost: number; repaired: number; removed: number };
   mgNest: { built: number; lost: number; repaired: number };
   core: { hpStart: number; hpEnd: number; maxHp: number };
@@ -70,7 +72,8 @@ function newWave(wave: number, coreHp: number, coreMaxHp: number): WaveRecord {
       killed: byType(),
       killedByPlayer: byType(),
       headshots: 0,
-      killsByWeapon: { rifle: 0, mg: 0, grenade: 0, satchel: 0, other: 0 },
+      killsByWeapon: { gun: 0, knife: 0, mg: 0, grenade: 0, satchel: 0, other: 0 },
+      killsByGun: {},
     },
     damageTaken: {
       ...zeroSplit(),
@@ -78,7 +81,7 @@ function newWave(wave: number, coreHp: number, coreMaxHp: number): WaveRecord {
     },
     plates: { applied: 0, bought: 0 },
     cashEarned: { total: 0, kills: 0, headshots: 0, waveBonus: 0, refunds: 0, debug: 0 },
-    cashSpent: { total: 0, walls: 0, mgNest: 0, repairs: 0, plates: 0 },
+    cashSpent: { total: 0, walls: 0, mgNest: 0, repairs: 0, plates: 0, weapons: 0, ammo: 0, weaponCrate: 0 },
     walls: { built: 0, lost: 0, repaired: 0, removed: 0 },
     mgNest: { built: 0, lost: 0, repaired: 0 },
     core: { hpStart: coreHp, hpEnd: coreHp, maxHp: coreMaxHp },
@@ -109,6 +112,8 @@ export class PlaytestLog {
   private coreHp: number = config.structures.core.hp;
   private coreMaxHp: number = config.structures.core.hp;
   private mounted = false;
+  /** The weapon in the player's hands (a def id), for crediting gun kills. */
+  private held = '';
   /** The armor/health split of the player's last hit, waiting for its `damageDealt` to say who dealt it. */
   private pendingHit: Split | null = null;
   /** The type of structure that just collapsed, waiting for its `damageDealt` to say what brought it down. */
@@ -160,6 +165,7 @@ export class PlaytestLog {
       if (headshot) e.headshots++;
     });
 
+    events.on('weaponEquipped', ({ weapon }) => (this.held = weapon));
     events.on('mgMounted', () => (this.mounted = true));
     events.on('mgDismounted', () => (this.mounted = false));
     events.on('playerDamaged', ({ armorDamage, healthDamage }) => {
@@ -181,13 +187,17 @@ export class PlaytestLog {
           source === 'player'
             ? type === 'explosive'
               ? 'grenade'
-              : this.mounted
-                ? 'mg'
-                : 'rifle'
+              : type === 'melee'
+                ? 'knife'
+                : this.mounted
+                  ? 'mg'
+                  : 'gun'
             : source === 'enemy' && type === 'explosive'
               ? 'satchel'
               : 'other';
-        this.current.enemies.killsByWeapon[weapon]++;
+        const e = this.current.enemies;
+        e.killsByWeapon[weapon]++;
+        if (weapon === 'gun') e.killsByGun[this.held] = (e.killsByGun[this.held] ?? 0) + 1;
       } else if (target.kind === 'structure' && killed) {
         if (this.pendingCollapse === 'wall' && source === 'enemy' && type === 'explosive') this.current.satchels.wallsDestroyed++;
         this.pendingCollapse = null;
@@ -220,10 +230,16 @@ export class PlaytestLog {
       if (reason === 'wall') c.walls += amount;
       else if (reason === 'mgNest') c.mgNest += amount;
       else if (reason === 'repair') c.repairs += amount;
+      else if (reason === 'weapon') c.weapons += amount;
+      else if (reason === 'ammo') c.ammo += amount;
+      else if (reason === 'weaponCrate') c.weaponCrate += amount;
       else c.plates += amount;
     });
 
-    events.on('structurePlaced', ({ type }) => (type === 'wall' ? this.current.walls.built++ : this.current.mgNest.built++));
+    events.on('structurePlaced', ({ type }) => {
+      if (type === 'wall') this.current.walls.built++;
+      else if (type === 'mgNest') this.current.mgNest.built++;
+    });
     events.on('structureRemoved', ({ type }) => {
       if (type === 'wall') this.current.walls.removed++;
     });
@@ -278,6 +294,9 @@ export class PlaytestLog {
     const e = w.enemies;
     const spawned = e.spawned.rifleman + e.spawned.sapper;
     const killed = e.killedByPlayer.rifleman + e.killedByPlayer.sapper;
+    const gunKills = Object.entries(e.killsByGun)
+      .map(([gun, n]) => `${gun} ${n}`)
+      .join(', ');
     const d = w.damageTaken;
     const src = (Object.keys(d.bySource) as PlayerDamageSource[])
       .filter((k) => d.bySource[k].armor + d.bySource[k].health > 0)
@@ -286,13 +305,15 @@ export class PlaytestLog {
     const lines = [
       `[playtest] Wave ${w.wave}: build ${duration(w.seconds.build)}, fight ${duration(w.seconds.fight)}, aftermath ${duration(w.seconds.aftermath)}`,
       `  enemies: ${spawned} spawned (${e.spawned.rifleman} riflemen, ${e.spawned.sapper} sappers), ${killed} killed by you ` +
-        `(${e.headshots} headshots; rifle ${e.killsByWeapon.rifle}, MG ${e.killsByWeapon.mg}, grenade ${e.killsByWeapon.grenade}), ` +
+        `(${e.headshots} headshots; guns ${e.killsByWeapon.gun}${gunKills ? ` [${gunKills}]` : ''}, knife ${e.killsByWeapon.knife}, ` +
+        `MG ${e.killsByWeapon.mg}, grenade ${e.killsByWeapon.grenade}), ` +
         `${e.killsByWeapon.satchel} killed by satchels`,
       `  damage taken: ${Math.round(d.armor)} armor, ${Math.round(d.health)} health${src ? ` (${src})` : ''}`,
       `  plates: ${w.plates.applied} applied, ${w.plates.bought} bought`,
       `  cash: +${money(w.cashEarned.total)} (kills ${money(w.cashEarned.kills)}, headshots ${money(w.cashEarned.headshots)}, ` +
         `wave bonus ${money(w.cashEarned.waveBonus)}), -${money(w.cashSpent.total)} (walls ${money(w.cashSpent.walls)}, ` +
-        `MG ${money(w.cashSpent.mgNest)}, repairs ${money(w.cashSpent.repairs)}, plates ${money(w.cashSpent.plates)})`,
+        `MG ${money(w.cashSpent.mgNest)}, repairs ${money(w.cashSpent.repairs)}, plates ${money(w.cashSpent.plates)}, ` +
+        `weapons ${money(w.cashSpent.weapons)}, ammo ${money(w.cashSpent.ammo)}, weapon crate ${money(w.cashSpent.weaponCrate)})`,
       `  walls: ${w.walls.built} built, ${w.walls.lost} lost, ${w.walls.repaired} repaired; core ${Math.round(w.core.hpStart)} -> ${Math.round(w.core.hpEnd)} / ${w.core.maxHp}`,
       `  satchels: ${w.satchels.planted} planted, ${w.satchels.dropped} dropped, ${w.satchels.wallsDestroyed} walls destroyed`,
     ];

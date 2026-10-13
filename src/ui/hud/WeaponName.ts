@@ -1,7 +1,7 @@
 import type { EventBus, GameEvents } from '../../core/EventBus';
 import './WeaponName.css';
 
-/** Equipped weapon's name in white under the ammo count, or the MG's while the player is on it. */
+/** The name of the weapon in hand in white under the ammo count, or the MG's while the player is on it. */
 export class WeaponName {
   private readonly element = document.createElement('div');
   private weapon = '';
@@ -10,7 +10,7 @@ export class WeaponName {
   constructor(events: EventBus<GameEvents>, anchor: HTMLElement) {
     this.element.className = 'hud-weapon-name';
     anchor.append(this.element);
-    events.on('ammoChanged', ({ displayName }) => {
+    events.on('weaponEquipped', ({ displayName }) => {
       this.weapon = displayName;
       this.render();
     });

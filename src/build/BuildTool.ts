@@ -17,6 +17,7 @@ import { StructureHighlight } from './StructureHighlight';
 import { wallYaw, type StructureManager } from './StructureManager';
 import { wallEnds, type WallEnd } from './WallRenderer';
 import { JOINT_RADIUS } from './WallGeometry';
+import { WEAPON_CRATE_SIZE } from './WeaponCrate';
 
 export const BuildError = {
   OUTSIDE: 'OUTSIDE BUILD AREA',
@@ -24,6 +25,7 @@ export const BuildError = {
   PLAYER: 'YOU ARE IN THE WAY',
   CASH: 'NOT ENOUGH CASH',
   LIMIT: 'MG NEST LIMIT REACHED',
+  CRATE_LIMIT: 'WEAPON CRATE LIMIT REACHED',
   REACH: 'OUT OF REACH',
 } as const;
 
@@ -34,8 +36,8 @@ const GROUND_CLEARANCE = 0.04;
 const SHRINK = 0.03;
 
 /**
- * First-person build tool, BUILD phase only. B takes it out or puts it away; while out the rifle is lowered.
- * Scroll picks what to build, R turns it, left click places it for its price, and F removes the structure
+ * First-person build tool, BUILD phase only. B takes it out or puts it away; while out the weapon is put away.
+ * The left and right arrows pick what to build, R turns it, left click places it for its price, and F removes the structure
  * under the crosshair for a partial refund, or clears the rubble under it for free.
  *
  * Walls go on grid edges: by default the wall runs across the player's view, and the ghost snaps to the
@@ -69,6 +71,7 @@ export class BuildTool {
   private readonly base = new Vector3();
   private readonly edge: Edge = { axis: 'x', i: 0, j: 0 };
   private readonly vertex: Cell = { i: 0, j: 0 };
+  private readonly cell: Cell = { i: 0, j: 0 };
   private readonly cells: Cell[] = [];
   private readonly ends: [WallEnd, WallEnd] = [
     { x: 0, z: 0, dir: 0, shape: 0 },
@@ -79,6 +82,7 @@ export class BuildTool {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -1 });
   private readonly wallBox: RAPIER.Cuboid;
   private readonly nestBox: RAPIER.Cuboid;
+  private readonly crateBox: RAPIER.Cuboid;
 
   constructor(
     scene: Scene,
@@ -96,6 +100,8 @@ export class BuildTool {
     // The nest checks its whole square, so the player cannot build it around themselves either.
     const outer = NEST.ring + NEST.bagDepth / 2 - SHRINK;
     this.nestBox = new RAPIER.Cuboid(outer, NEST_WALL_HEIGHT / 2, outer);
+    const c = WEAPON_CRATE_SIZE;
+    this.crateBox = new RAPIER.Cuboid(c.x / 2 - SHRINK, c.y / 2 - GROUND_CLEARANCE, c.z / 2 - SHRINK);
 
     events.on('phaseChanged', ({ to }) => {
       this.phase = to;
@@ -119,7 +125,7 @@ export class BuildTool {
     if (input.wasPressed('Mouse0')) this.wantPlace = true;
     if (input.wasPressed('KeyF')) this.wantRemove = true;
     if (input.wasPressed('KeyR')) this.turns++;
-    this.scroll += input.wheelSteps;
+    this.scroll += input.cycleSteps;
   }
 
   /** Aim, preview, and carry out this frame's requests. Call after the camera has moved. */
@@ -142,8 +148,8 @@ export class BuildTool {
     const rubble = hit && !aimed ? this.structures.rubbleOf(hit.collider) : undefined;
     this.setTarget(aimed);
 
-    if (rubble && buildable.type === 'mgNest') {
-      // Wall rubble does not stop a wall going up over it, so only the nest needs it cleared first.
+    if (rubble && buildable.type !== 'wall') {
+      // Wall rubble does not stop a wall going up over it, so only the nest and the crate need it cleared first.
       this.ghost.hide();
       this.setPrompt({ mode: 'clearRubble' });
       if (this.wantRemove) this.clearRubble(rubble);
@@ -156,11 +162,7 @@ export class BuildTool {
     } else {
       // The player's facing, snapped to a quarter turn, plus their R turns.
       const facing = Math.round(aim.yaw / QUARTER_TURN) + this.rotation;
-      const error = this.groundPoint(aim.eye)
-        ? buildable.type === 'wall'
-          ? this.previewWall(facing)
-          : this.previewNest(facing)
-        : BuildError.REACH;
+      const error = this.groundPoint(aim.eye) ? this.preview(buildable, facing) : BuildError.REACH;
       if (error === BuildError.REACH) this.ghost.hide();
       this.setPrompt({ mode: 'place', item: buildable.name, cost: buildable.cost, error, rubble: rubble !== undefined });
       if (this.wantPlace) this.place(buildable, facing, error);
@@ -177,6 +179,12 @@ export class BuildTool {
       this.setPrompt({ mode: 'hidden' });
     }
     this.events.emit('buildToolChanged', { active });
+  }
+
+  private preview(buildable: Buildable, facing: number): string | null {
+    if (buildable.type === 'wall') return this.previewWall(facing);
+    if (buildable.type === 'mgNest') return this.previewNest(facing);
+    return this.previewCrate(facing);
   }
 
   // ---- Walls ----
@@ -230,6 +238,29 @@ export class BuildTool {
     if (this.grid.wallMaskAt(this.vertex.i, this.vertex.j) !== 0) return BuildError.OCCUPIED;
     // Walls do count here: the sandbags must not overlap any.
     const overlap = this.overlap(this.nestBox, yaw, false);
+    if (overlap) return overlap;
+    if (this.cash < buildable.cost) return BuildError.CASH;
+    return null;
+  }
+
+  // ---- Weapon crate ----
+
+  /** Snap the crate to the center of the cell under the ground point. */
+  private previewCrate(facing: number): string | null {
+    const onMap = this.grid.cellAt(this.ground.x, this.ground.z, this.cell);
+    this.base.set(this.grid.centerX(this.cell.i), 0, this.grid.centerZ(this.cell.j));
+    const yaw = facing * QUARTER_TURN;
+    const error = onMap ? this.checkCrate(yaw) : BuildError.OUTSIDE;
+    this.ghost.showWeaponCrate(this.base, yaw, error === null);
+    return error;
+  }
+
+  private checkCrate(yaw: number): string | null {
+    const buildable = BUILDABLES[this.selected];
+    if (this.structures.countOf('weaponCrate') >= buildable.limit) return BuildError.CRATE_LIMIT;
+    if (!this.grid.isInBuildRadius(this.cell.i, this.cell.j)) return BuildError.OUTSIDE;
+    if (!this.grid.isFree(this.cell.i, this.cell.j)) return BuildError.OCCUPIED;
+    const overlap = this.overlap(this.crateBox, yaw, false);
     if (overlap) return overlap;
     if (this.cash < buildable.cost) return BuildError.CASH;
     return null;
@@ -299,7 +330,8 @@ export class BuildTool {
     }
     if (!this.purse.spend(buildable.cost, buildable.type)) return;
     if (buildable.type === 'wall') this.structures.placeWall(this.edge, buildable.cost);
-    else this.structures.placeMgNest({ ...this.vertex }, facing * QUARTER_TURN, buildable.cost);
+    else if (buildable.type === 'mgNest') this.structures.placeMgNest({ ...this.vertex }, facing * QUARTER_TURN, buildable.cost);
+    else this.structures.placeWeaponCrate({ ...this.cell }, facing * QUARTER_TURN, buildable.cost);
   }
 
   private clearRubble(pile: RubblePile): void {

@@ -13,6 +13,7 @@ import type { Structure } from './Structure';
 import { WallJoints } from './WallJoints';
 import { WallRenderer } from './WallRenderer';
 import { WallSegment } from './WallSegment';
+import { WeaponCrate } from './WeaponCrate';
 
 /** Yaw for a wall on an edge: x edges run along +x, z edges along +z. */
 export function wallYaw(edge: Edge): number {
@@ -170,6 +171,17 @@ export class StructureManager {
     return nest;
   }
 
+  /** Put the weapon crate on `cell`. The build tool has already checked the spot and taken the cash. */
+  placeWeaponCrate(cell: Cell, yaw: number, cost: number): Structure {
+    const id = this.nextId++;
+    const base = new Vector3(this.grid.centerX(cell.i), 0, this.grid.centerZ(cell.j));
+    const crate = new WeaponCrate(id, { ...cell }, base, yaw, this.scene, this.world);
+    this.add(crate, cost);
+    this.grid.occupy([cell], id, true);
+    this.events.emit('navCellsChanged', { cells: [{ ...cell }], blocked: true });
+    return crate;
+  }
+
   /** The player took it down with the build tool. */
   remove(structure: Structure, refund: number): void {
     if (!this.structures.has(structure.id)) return;
@@ -214,7 +226,7 @@ export class StructureManager {
   private register(colliders: readonly RAPIER.Collider[], structure: Structure): void {
     for (const collider of colliders) {
       this.byCollider.set(collider.handle, structure);
-      this.registry.addHitbox(collider, structure, 'body');
+      if (structure.damageable) this.registry.addHitbox(collider, structure, 'body');
     }
   }
 

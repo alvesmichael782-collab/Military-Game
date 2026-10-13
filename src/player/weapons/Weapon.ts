@@ -1,144 +1,45 @@
 import type { EventBus, GameEvents } from '../../core/EventBus';
 import type { AimState } from '../Aim';
+import { fireInterval, type GunDef, type WeaponSounds } from './defs/WeaponDef';
+import type { HeldWeapon } from './HeldWeapon';
 
 /**
- * A weapon's sounds, as sound bank ids (see core/audio/sounds.ts). A new gun only needs its own set here
- * plus its bank entries; the combat sounds play them from the weapon events.
- */
-export interface WeaponSoundSet {
-  /** One shot. */
-  readonly fire: string;
-  /** The burst's last shot and its echo, played when a burst ends. */
-  readonly fireTail: string;
-  readonly reload: string;
-  /** Trigger pulled on an empty magazine. Without it the shared `weapon.dryFire` click plays. */
-  readonly dryFire?: string;
-  /** Weapon brought out. */
-  readonly equip?: string;
-}
-
-interface Vec3Like {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-}
-
-/**
- * How a weapon aims down its sights. Every value belongs to the weapon, so a new gun only needs its own set.
- * The multipliers apply in full when fully aimed and blend in over the transition.
- */
-export interface WeaponAdsStats {
-  /** View model position (meters) and rotation (radians) when fully aimed, so the sights sit on the screen center. */
-  readonly viewPosition: Vec3Like;
-  readonly viewRotation: Vec3Like;
-  /** Horizontal field of view when fully aimed, in degrees at 4:3. */
-  readonly fov: number;
-  /** Seconds from the hip to fully aimed, and back. */
-  readonly transitionTime: number;
-  readonly spreadMultiplier: number;
-  readonly recoilMultiplier: number;
-  readonly moveSpeedMultiplier: number;
-  /** View model mouse sway and walking bob. */
-  readonly swayMultiplier: number;
-  readonly bobMultiplier: number;
-  /** Muzzle position relative to the eye when fully aimed, in meters (forward, right, down). */
-  readonly muzzle: { readonly forward: number; readonly right: number; readonly down: number };
-}
-
-/**
- * A weapon's procedural reload animation, timed to its reload sound. Times in seconds from the start of the
- * reload, angles in degrees, distances in meters in view model space. Each gun carries its own set.
- */
-export interface WeaponReloadAnimation {
-  /** Tilt, roll and dip toward the player, reached at `tiltEnd`. */
-  readonly tiltEnd: number;
-  readonly tiltPitch: number;
-  readonly tiltYaw: number;
-  readonly tiltRoll: number;
-  readonly tiltDip: number;
-  /** The magazine drops out (initial speed in m/s, gravity in m/s^2) and is hidden after falling `dropDistance`. */
-  readonly releaseTime: number;
-  readonly dropSpeed: number;
-  readonly dropGravity: number;
-  readonly dropDistance: number;
-  /** A fresh magazine rises from `newMagDepth` to `insertDepth` below the well, tipped by `newMagTilt`. */
-  readonly newMagStart: number;
-  readonly newMagEnd: number;
-  readonly newMagDepth: number;
-  readonly insertDepth: number;
-  readonly newMagTilt: number;
-  /** Slides into the well from `insertTime`; seats at `seatTime`, which is when the ammo goes in. */
-  readonly insertTime: number;
-  readonly seatTime: number;
-  readonly seatBump: number;
-  readonly seatJoltLift: number;
-  readonly seatJoltPitch: number;
-  readonly seatJoltTime: number;
-  /** Back to the normal pose, with an overshoot that settles (0 for none). */
-  readonly returnStart: number;
-  readonly returnEnd: number;
-  readonly settleOvershoot: number;
-  /**
-   * The left hand: leaves the handguard at `handReachStart` and reaches the magazine as it is released, holds it
-   * (down with the old one, up with the new one) until `handReturnStart`, and is back on the handguard at `handReturnEnd`.
-   */
-  readonly handReachStart: number;
-  readonly handReturnStart: number;
-  readonly handReturnEnd: number;
-}
-
-export interface WeaponStats {
-  /** Internal id. */
-  readonly name: string;
-  /** Name shown on the HUD. */
-  readonly displayName: string;
-  readonly magazineSize: number;
-  readonly reserveAmmo: number;
-  /** Seconds between shots. */
-  readonly fireInterval: number;
-  readonly reloadTime: number;
-  readonly reloadAnimation: WeaponReloadAnimation;
-  /** Keeps firing while the trigger is held. */
-  readonly automatic: boolean;
-  readonly sounds: WeaponSoundSet;
-  readonly ads: WeaponAdsStats;
-}
-
-/**
- * Base for magazine-fed weapons: ammo, reloading, fire rate and trigger handling.
+ * Base for magazine-fed guns: ammo, reloading, fire rate and trigger handling for semi-auto, full auto and burst.
  * Subclasses decide what a shot does (`fire`), and report their spread and recoil.
  */
-export abstract class Weapon {
+export abstract class Weapon implements HeldWeapon {
   private _magazine: number;
   private _reserve: number;
   private reloadTimer = 0;
+  private reloadDuration = 0;
+  private _reloadFromEmpty = false;
   /** Set once this reload's new magazine has seated and the ammo is in. */
   private reloadLoaded = false;
   private cooldown = 0;
   private triggerHeld = false;
-  /** Set once the current trigger pull has fired, for semi-auto. */
+  /** Set once the current trigger pull has fired its share (one round semi-auto, a burst in burst mode). */
   private triggerSpent = false;
   /** Set once the current trigger pull has clicked on an empty magazine, so it clicks only once. */
   private dryClicked = false;
   /** Shots fired since the trigger was pulled. */
-  private burstShots = 0;
+  private pullShots = 0;
   /** 0 at the hip, 1 fully aimed down the sights (eased). */
   protected aimAmount = 0;
   /** Payload for the weapon events that carry only the weapon. */
-  private readonly event: { readonly weapon: string; readonly sounds: WeaponSoundSet };
+  protected readonly event: { readonly weapon: string; readonly sounds: WeaponSounds };
+  private readonly interval: number;
 
   constructor(
-    readonly stats: WeaponStats,
+    readonly def: GunDef,
     protected readonly events: EventBus<GameEvents>,
   ) {
-    this._magazine = stats.magazineSize;
-    this._reserve = stats.reserveAmmo;
-    this.event = { weapon: stats.name, sounds: stats.sounds };
+    this._magazine = def.magazineSize;
+    this._reserve = def.reserveAmmo;
+    this.event = { weapon: def.id, sounds: def.sounds };
+    this.interval = fireInterval(def);
   }
 
-  /** Current inaccuracy as a cone half-angle, in radians. */
   abstract get spread(): number;
-  /** View kick from recoil, in radians. Positive pitch is up, positive yaw is left. */
   abstract get recoilPitch(): number;
   abstract get recoilYaw(): number;
 
@@ -159,16 +60,18 @@ export abstract class Weapon {
     return this.reloadTimer > 0;
   }
 
-  /** True while the trigger is held and the weapon can shoot. */
-  get isFiring(): boolean {
-    return (
-      this.triggerHeld && !this.isReloading && this._magazine > 0 && (this.stats.automatic || !this.triggerSpent)
-    );
+  /** The current (or last) reload started with an empty magazine, so it ends by chambering a round. */
+  get reloadFromEmpty(): boolean {
+    return this._reloadFromEmpty;
   }
 
-  /** Seconds since the reload started, or -1 when not reloading. */
+  /** True while the trigger is held and the weapon can shoot. */
+  get isFiring(): boolean {
+    return this.triggerHeld && !this.isReloading && this._magazine > 0 && this.canShootThisPull();
+  }
+
   get reloadElapsed(): number {
-    return this.isReloading ? this.stats.reloadTime - this.reloadTimer : -1;
+    return this.isReloading ? this.reloadDuration - this.reloadTimer : -1;
   }
 
   setTrigger(held: boolean): void {
@@ -180,7 +83,6 @@ export abstract class Weapon {
     this.triggerHeld = held;
   }
 
-  /** How far the weapon is aimed down its sights: 0 at the hip, 1 fully aimed. */
   setAimAmount(amount: number): void {
     this.aimAmount = amount;
   }
@@ -190,10 +92,12 @@ export abstract class Weapon {
     return 1 + (multiplier - 1) * this.aimAmount;
   }
 
-  /** Start a reload if it would add ammo. Returns true if a reload started. */
   reload(): boolean {
-    if (this.isReloading || this._magazine >= this.stats.magazineSize || this._reserve <= 0) return false;
-    this.reloadTimer = this.stats.reloadTime;
+    if (this.isReloading || this._magazine >= this.def.magazineSize || this._reserve <= 0) return false;
+    const r = this.def.reload;
+    this._reloadFromEmpty = this._magazine === 0;
+    this.reloadDuration = r.time + (r.kind === 'magazine' && this._reloadFromEmpty ? r.emptyExtra : 0);
+    this.reloadTimer = this.reloadDuration;
     this.reloadLoaded = false;
     this.events.emit('weaponReloadStarted', this.event);
     return true;
@@ -206,36 +110,34 @@ export abstract class Weapon {
     this.events.emit('weaponReloadCancelled', this.event);
   }
 
-  /** Announce that the weapon was brought out. */
-  equip(): void {
-    this.events.emit('weaponEquipped', this.event);
+  putAway(): void {
+    this.setTrigger(false);
+    this.cancelReload();
   }
 
-  /** Debug: full magazine and reserve. */
+  /** Full magazine and reserve, as bought at the weapon crate (or the debug refill). */
   refill(): void {
     this.cancelReload();
-    this._magazine = this.stats.magazineSize;
-    this._reserve = this.stats.reserveAmmo;
+    this._magazine = this.def.magazineSize;
+    this._reserve = this.def.reserveAmmo;
     this.announce();
   }
 
-  /** Emit the current ammo, e.g. so a freshly built HUD can draw it. */
   announce(): void {
     this.events.emit('ammoChanged', {
-      weapon: this.stats.name,
-      displayName: this.stats.displayName,
+      weapon: this.def.id,
+      displayName: this.def.displayName,
       magazine: this._magazine,
-      magazineSize: this.stats.magazineSize,
+      magazineSize: this.def.magazineSize,
       reserve: this._reserve,
     });
   }
 
-  /** Advance timers and fire if the trigger is held. Call once per rendered frame. */
   update(dt: number, aim: AimState): void {
     if (this.isReloading) {
       this.reloadTimer -= dt;
-      // The ammo goes in when the new magazine seats; the rest of the reload is the rifle coming back up.
-      if (!this.reloadLoaded && this.reloadElapsed >= this.stats.reloadAnimation.seatTime) this.loadMagazine();
+      // The ammo goes in when the new magazine seats; the rest of the reload is the gun coming back up.
+      if (!this.reloadLoaded && this.reloadElapsed >= this.def.reload.seatTime) this.loadMagazine();
       if (this.reloadTimer <= 0) this.finishReload();
     }
     this.tick(dt, aim);
@@ -244,6 +146,12 @@ export abstract class Weapon {
     this.cooldown -= dt;
     if (this.triggerHeld && !this.isReloading) this.pullTrigger(aim);
     if (this.cooldown < 0) this.cooldown = 0;
+  }
+
+  private canShootThisPull(): boolean {
+    if (this.def.fireMode === 'auto') return true;
+    if (this.def.fireMode === 'semi') return !this.triggerSpent;
+    return this.pullShots < (this.def.burstCount ?? 3);
   }
 
   private pullTrigger(aim: AimState): void {
@@ -257,21 +165,24 @@ export abstract class Weapon {
         }
         return;
       }
-      if (!this.stats.automatic && this.triggerSpent) return;
+      if (!this.canShootThisPull()) {
+        this.triggerSpent = true;
+        return;
+      }
 
       this._magazine--;
-      this.triggerSpent = true;
-      this.burstShots++;
+      this.pullShots++;
+      if (this.def.fireMode === 'semi') this.triggerSpent = true;
       this.fire(aim);
       this.announce();
-      this.cooldown += this.stats.fireInterval;
+      this.cooldown += this.interval;
       if (this._magazine === 0) this.endBurst();
     }
   }
 
   private endBurst(): void {
-    if (this.burstShots === 0) return;
-    this.burstShots = 0;
+    if (this.pullShots === 0) return;
+    this.pullShots = 0;
     this.events.emit('weaponBurstEnded', this.event);
   }
 
@@ -282,7 +193,7 @@ export abstract class Weapon {
 
   private loadMagazine(): void {
     this.reloadLoaded = true;
-    const loaded = Math.min(this.stats.magazineSize - this._magazine, this._reserve);
+    const loaded = Math.min(this.def.magazineSize - this._magazine, this._reserve);
     this._magazine += loaded;
     this._reserve -= loaded;
     this.announce();

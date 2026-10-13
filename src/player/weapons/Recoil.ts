@@ -1,23 +1,24 @@
 import { MathUtils } from 'three';
-import { config } from '../../core/config';
-
-type RecoilConfig = typeof config.rifle.recoil;
+import type { RecoilPattern } from './defs/WeaponDef';
 
 /**
  * Counter-Strike-style recoil: a fixed, learnable pattern. Each shot pushes the view up
- * (fast at first, then flattening out) while a horizontal drift sways right then left.
- * The view settles back once firing stops, and the pattern restarts after a short pause.
- * The first bullet of a burst always goes exactly where you aim.
+ * (fast at first, then flattening out) while a horizontal drift sways right then left, plus an
+ * optional random sideways jitter. The view settles back once firing stops, and the pattern
+ * restarts after a short pause. The first bullet of a burst always goes exactly where you aim.
  */
 export class Recoil {
   /** Current view offset in radians. Positive pitch is up, positive yaw is left (same as the camera). */
   pitch = 0;
   yaw = 0;
+  /** The last shot's kick, in degrees: up, and sideways (positive left). */
+  lastKickUp = 0;
+  lastKickSide = 0;
 
   private shots = 0;
   private sinceShot = Infinity;
 
-  constructor(private readonly cfg: RecoilConfig) {}
+  constructor(private readonly cfg: RecoilPattern) {}
 
   /** Index of the next shot in the pattern. */
   get shotIndex(): number {
@@ -30,10 +31,14 @@ export class Recoil {
     const i = this.shots;
     const up = (i < c.climbShots ? c.kickUp : c.plateauKickUp) * scale;
     const cap = MathUtils.degToRad(c.maxPitch * scale);
+    const before = this.pitch;
     // Never pull the view down if a higher-recoil stance already climbed past this cap.
     if (this.pitch < cap) this.pitch = Math.min(this.pitch + MathUtils.degToRad(up), cap);
-    // Drift follows the pattern's offset curve; negative yaw is to the right.
-    this.yaw -= MathUtils.degToRad(this.driftAt(i + 1) - this.driftAt(i)) * scale;
+    // Drift follows the pattern's offset curve (negative yaw is to the right), plus the random jitter.
+    const side = -(this.driftAt(i + 1) - this.driftAt(i)) * scale + (Math.random() * 2 - 1) * c.jitter * scale;
+    this.yaw += MathUtils.degToRad(side);
+    this.lastKickUp = MathUtils.radToDeg(this.pitch - before);
+    this.lastKickSide = side;
     this.shots++;
     this.sinceShot = 0;
   }

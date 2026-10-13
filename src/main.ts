@@ -44,12 +44,14 @@ import { PlayerController } from './player/PlayerController';
 import { PlayerHealth } from './player/PlayerHealth';
 import { RepairTool } from './player/RepairTool';
 import { ScreenShake } from './player/ScreenShake';
-import { loadRifleModel } from './player/weapons/RifleAsset';
+import { WEAPON_DEFS } from './player/weapons/defs';
+import { loadWeaponAssets } from './player/weapons/WeaponAssets';
 import { WeaponManager } from './player/weapons/WeaponManager';
 import { ArmorCrate } from './economy/ArmorCrate';
 import { CashWallet } from './economy/CashWallet';
 import { connectKillRewards } from './economy/KillRewards';
 import { connectWaveRewards } from './economy/WaveRewards';
+import { WeaponShop } from './economy/WeaponShop';
 import { DebugOverlay, type DebugOverlayState } from './ui/DebugOverlay';
 import { HudRoot } from './ui/hud/HudRoot';
 import { StructureHpBar } from './ui/StructureHpBar';
@@ -82,9 +84,9 @@ function createRenderer(): WebGLRenderer {
 
 async function boot(): Promise<void> {
   // The stencils on crates are drawn with the HUD font, so it must be loaded before the textures are painted.
-  const [physics, rifleView] = await Promise.all([
+  const [physics, weaponAssets] = await Promise.all([
     Physics.create(),
-    loadRifleModel(),
+    loadWeaponAssets(WEAPON_DEFS.map((def) => def.view.model)),
     loadMgGunModel(),
     document.fonts.load('700 64px Oswald'),
   ]);
@@ -146,7 +148,8 @@ async function boot(): Promise<void> {
   const explosions = new Explosions(physics.world, registry, events);
   const grenades = new Grenades(scene, physics.world, explosions, events);
   const thrower = new GrenadeThrower(physics.world, grenades, events);
-  const weapons = new WeaponManager(events, physics.world, registry, rifleView);
+  const weapons = new WeaponManager(events, physics.world, registry, weaponAssets);
+  const shop = new WeaponShop(scene, physics.world, structures, weaponAssets, wallet, events);
   const enemies = new EnemyManager(
     scene,
     physics.world,
@@ -183,7 +186,7 @@ async function boot(): Promise<void> {
   armor.announce();
   health.announce();
   wallet.announce();
-  weapons.equipped.announce();
+  weapons.announce();
   thrower.announce();
   let playerActive = false;
   const shake = new ScreenShake(events, fpsCamera.camera);
@@ -265,7 +268,7 @@ async function boot(): Promise<void> {
     if (input.wasPressed('F1')) toggleDebugView();
     if (input.wasPressed('KeyK')) applyDamage(health, config.debug.testDamage, 'ballistic', player.position);
     if (input.wasPressed('KeyU')) {
-      weapons.equipped.refill();
+      weapons.refillAll();
       thrower.refill();
     }
     if (input.wasPressed('KeyN')) {
@@ -315,11 +318,14 @@ async function boot(): Promise<void> {
     // The build tool replaces the rifle and grenades while it is out; repairing lowers them too.
     buildTool.handleInput(input, playing && !mounted);
     repair.handleInput(input, playing && !armor.isPlating && !mounted);
-    // Mounting the MG takes the rifle out of hand too, which drops the aim.
+    // Mounting the MG puts the weapon away too, which drops the aim. No switching meanwhile, nor while plating.
     const armed = !buildTool.isActive && !repair.isRepairing && !mounted;
     weapons.handleInput(input, playing && !armor.isPlating && armed, player.sprintHeld);
     thrower.handleInput(input, playing && armed);
     crate.handleInput(input, playing);
+    // The arrow keys pick build items while the build tool is out, so the weapon crate needs it put away.
+    const canShop = playing && !buildTool.isActive && !mounted;
+    shop.handleInput(input, canShop);
     mount.handleInput(input, playing && !buildTool.isActive);
     mg.setTrigger(playing && mounted && !armor.isPlating && input.isDown('Mouse0'));
     const lookX = playing ? input.mouseDeltaX : 0;
@@ -337,18 +343,18 @@ async function boot(): Promise<void> {
     aim.yaw = fpsCamera.yaw;
     aim.pitch = fpsCamera.pitch;
     weapons.update(frameDt, aim, lookX, lookY);
-    fpsCamera.setRecoil(weapons.equipped.recoilPitch, weapons.equipped.recoilYaw);
+    fpsCamera.setRecoil(weapons.recoilPitch, weapons.recoilYaw);
     if (thrower.update(frameDt, aim)) weapons.onThrow();
     mg.update(frameDt, mount.nest, fpsCamera.camera.position, fpsCamera.yaw, fpsCamera.pitch);
     // Aiming down sights zooms, steadies the head and slows the body (from the next fixed step).
     const ads = weapons.ads;
     fpsCamera.setFov(ads.fov);
     fpsCamera.headBobScale = ads.headBobScale;
-    player.setAim(ads.aiming, 1 + (weapons.equipped.stats.ads.moveSpeedMultiplier - 1) * ads.amount);
+    player.setAim(ads.aiming, weapons.moveSpeedScale);
     shake.update(frameDt);
     fpsCamera.setShake(shake.pitch, shake.yaw, shake.roll);
     buildTool.update(aim);
-    // E is shared by the armor crate, repairs and the MG: the closest one the player is looking at gets it.
+    // E is shared by the armor crate, the weapon crate, repairs and the MG: the closest one the player is looking at gets it.
     const canRepair = playing && !armor.isPlating && !mount.mounted;
     const crateDistance = playing && !mount.mounted ? crate.interactDistance(aim) : Infinity;
     let repairDistance = canRepair ? repair.interactDistance(aim) : Infinity;
@@ -357,8 +363,10 @@ async function boot(): Promise<void> {
     if (mountDistance < Infinity && repair.candidate !== null && repair.candidate === mount.candidate && !repair.isRepairing) {
       repairDistance = Infinity;
     }
-    const nearest = Math.min(crateDistance, repairDistance, mountDistance);
+    const shopDistance = canShop ? shop.interactDistance(aim) : Infinity;
+    const nearest = Math.min(crateDistance, repairDistance, mountDistance, shopDistance);
     crate.update(aim, playing && !mount.mounted && crateDistance <= nearest);
+    shop.update(frameDt, canShop && shopDistance <= nearest);
     repair.update(frameDt, aim, canRepair && repairDistance <= nearest);
     mount.update(aim, playing && mountDistance <= nearest);
     core.update(fpsCamera.camera);
@@ -450,7 +458,7 @@ async function boot(): Promise<void> {
   // Dev-only handle for automated playtests and console poking. Stripped from production builds.
   if (import.meta.env.DEV) {
     Object.assign(window, {
-      __game: { applyDamage, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
+      __game: { applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
     });
   }
 

@@ -55,6 +55,7 @@
   letter-spacing: calc(1.5 * var(--rp));
 }
 
+.hud-ammo__smear[hidden],
 .hud-ammo__magazine[hidden],
 .hud-ammo__divider[hidden],
 .hud-ammo__reserve[hidden] {

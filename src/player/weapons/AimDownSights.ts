@@ -3,8 +3,10 @@ import { config } from '../../core/config';
 import type { EventBus, GameEvents } from '../../core/EventBus';
 import type { Input } from '../../core/Input';
 import { verticalFovFrom4x3 } from '../FPSCamera';
-import type { WeaponAdsStats } from './Weapon';
+import type { AdsStats } from './defs/WeaponDef';
 
+/** Seconds to ease back to the hip when no aim stats are known yet. */
+const DEFAULT_TRANSITION = 0.2;
 const TAN_HALF_HIP_FOV = Math.tan(MathUtils.degToRad(verticalFovFrom4x3(config.camera.fov)) / 2);
 
 /**
@@ -12,7 +14,7 @@ const TAN_HALF_HIP_FOV = Math.tan(MathUtils.degToRad(verticalFovFrom4x3(config.c
  * may aim right now, and eases between the hip and the sights. The weapon's own `ads` values say
  * how far to zoom and how fast; everything else reads `amount`.
  *
- * Aiming is blocked while the weapon is not in hand (building, repairing, plating, and later mounting),
+ * Aiming is blocked while no gun is fully in hand (switching, the knife, building, repairing, plating, the MG),
  * while reloading and briefly after a grenade throw. In hold mode the aim comes back once the block ends
  * if the key is still held; in toggle mode a block cancels it. Sprint and aim cancel each other: the
  * most recent press wins, and a held aim key aims again when sprint is let go.
@@ -31,6 +33,8 @@ export class AimDownSights {
   private _amount = 0;
   private _fov: number = config.camera.fov;
   private announcedAmount = -1;
+  /** The last gun's aim stats, so the zoom eases out with them after it is put away. */
+  private lastAds: AdsStats | null = null;
 
   constructor(private readonly events: EventBus<GameEvents>) {}
 
@@ -89,6 +93,15 @@ export class AimDownSights {
     }
   }
 
+  /** The weapon is going away (switching): drop the aim, including a toggled one. */
+  drop(): void {
+    this.wanted = false;
+    if (this._aiming) {
+      this._aiming = false;
+      this.events.emit('adsChanged', { aiming: false });
+    }
+  }
+
   /** A grenade was thrown: drop the aim for a moment. */
   onThrow(): void {
     this.throwTimer = config.ads.throwDropTime;
@@ -98,13 +111,17 @@ export class AimDownSights {
     }
   }
 
-  /** Ease toward the sights or the hip at the weapon's speed. Call once per rendered frame. */
-  update(dt: number, ads: WeaponAdsStats): void {
+  /**
+   * Ease toward the sights or the hip at the weapon's speed. Call once per rendered frame. `ads` is the weapon in
+   * hand's aim stats, or null when nothing that can aim is in hand (it eases back to the hip).
+   */
+  update(dt: number, ads: AdsStats | null): void {
     this.throwTimer = Math.max(0, this.throwTimer - dt);
-    const step = dt / Math.max(ads.transitionTime, 1e-3);
-    this.progress = MathUtils.clamp(this.progress + (this._aiming ? step : -step), 0, 1);
+    if (ads) this.lastAds = ads;
+    const step = dt / Math.max(this.lastAds?.transitionTime ?? DEFAULT_TRANSITION, 1e-3);
+    this.progress = MathUtils.clamp(this.progress + (this._aiming && ads ? step : -step), 0, 1);
     this._amount = MathUtils.smoothstep(this.progress, 0, 1);
-    this._fov = MathUtils.lerp(config.camera.fov, ads.fov, this._amount);
+    this._fov = MathUtils.lerp(config.camera.fov, this.lastAds?.fov ?? config.camera.fov, this._amount);
     if (this._amount !== this.announcedAmount) {
       this.announcedAmount = this._amount;
       this.events.emit('adsProgress', { amount: this._amount, fov: this._fov });

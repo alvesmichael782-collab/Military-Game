@@ -7,13 +7,19 @@ import './AmmoCounter.css';
 
 /**
  * Bottom right: big magazine count, thin divider, zero-padded reserve ("13 | 062") over a red smear.
- * The magazine dims while reloading and pops when the fresh magazine is in; a dry fire shakes it.
- * Hidden while the player is on the MG, whose heat bar shows over the same smear.
+ * Shows the weapon in hand. The magazine dims while reloading and pops when the fresh magazine is in; a dry
+ * fire shakes it. Hidden while the player is on the MG, whose heat bar shows over the same smear, and with the knife.
  */
 export class AmmoCounter {
   private readonly magazine = document.createElement('span');
   private readonly reserve = document.createElement('span');
+  private readonly divider = document.createElement('div');
+  private readonly smear: SVGSVGElement;
   private reloading = false;
+  /** The weapon in hand: only its ammo is shown (a refill of the other gun must not take over the counter). */
+  private weapon = '';
+  private melee = false;
+  private mounted = false;
 
   constructor(events: EventBus<GameEvents>, anchor: HTMLElement) {
     const smear = createBrushSmear({
@@ -28,14 +34,22 @@ export class AmmoCounter {
       coreStart: 0.36,
     });
     smear.classList.add('hud-ammo__smear');
+    this.smear = smear;
 
-    const divider = document.createElement('div');
-    divider.className = 'hud-ammo__divider';
+    this.divider.className = 'hud-ammo__divider';
     this.magazine.className = 'hud-ammo__magazine';
     this.reserve.className = 'hud-ammo__reserve';
-    anchor.append(smear, this.magazine, divider, this.reserve);
+    anchor.append(smear, this.magazine, this.divider, this.reserve);
 
-    events.on('ammoChanged', ({ magazine, magazineSize, reserve }) => {
+    events.on('weaponEquipped', ({ weapon, kind }) => {
+      this.weapon = weapon;
+      this.melee = kind === 'melee';
+      this.reloading = false;
+      this.magazine.classList.remove('is-reloading');
+      this.render();
+    });
+    events.on('ammoChanged', ({ weapon, magazine, magazineSize, reserve }) => {
+      if (weapon !== this.weapon) return;
       setFixedDigits(this.magazine, String(magazine));
       this.magazine.classList.toggle('is-low', magazine <= magazineSize * config.hud.lowAmmoFraction);
       setFixedDigits(this.reserve, String(reserve).padStart(3, '0'));
@@ -46,15 +60,34 @@ export class AmmoCounter {
         pop(this.magazine, 1.12, 300);
       }
     });
-    events.on('weaponReloadStarted', () => {
+    events.on('weaponReloadStarted', ({ weapon }) => {
+      if (weapon !== this.weapon) return;
       this.reloading = true;
       this.magazine.classList.add('is-reloading');
     });
+    events.on('weaponReloadCancelled', () => {
+      this.reloading = false;
+      this.magazine.classList.remove('is-reloading');
+    });
     events.on('weaponDryFired', () => this.shake());
-    // On the MG the heat bar takes the numbers' place over the same smear.
-    const numbers = [this.magazine, divider, this.reserve];
-    events.on('mgMounted', () => numbers.forEach((n) => (n.hidden = true)));
-    events.on('mgDismounted', () => numbers.forEach((n) => (n.hidden = false)));
+    events.on('mgMounted', () => {
+      this.mounted = true;
+      this.render();
+    });
+    events.on('mgDismounted', () => {
+      this.mounted = false;
+      this.render();
+    });
+  }
+
+  /**
+   * On the MG the heat bar takes the numbers' place over the same smear. With the knife there is no ammo, so the
+   * numbers and their smear are hidden and only the weapon name shows.
+   */
+  private render(): void {
+    const hideNumbers = this.mounted || this.melee;
+    for (const n of [this.magazine, this.divider, this.reserve]) n.hidden = hideNumbers;
+    this.smear.toggleAttribute('hidden', this.melee && !this.mounted);
   }
 
   /** Empty click: a short sideways shake so the empty magazine reads at a glance. */

@@ -37,6 +37,8 @@ const OLIVE: RGB = [92, 96, 62];
 const OLIVE_DARK: RGB = [64, 68, 42];
 const BURLAP: RGB = [176, 156, 112];
 const STENCIL = 'rgb(40, 34, 26)';
+/** Faded pale stencil paint on olive. */
+const STENCIL_PALE = 'rgb(214, 204, 166)';
 
 /** Shared painting for any weathered surface: broad mottling, fine grain. */
 function weather(p: Pixels, seed: number, amount: number, cells = 4): void {
@@ -259,6 +261,30 @@ export function createArmorCrateTexture(): CanvasTexture {
   const ctx = context2d(canvas);
   stencilText(ctx, 'ARMOR', 128, 118, 74, STENCIL, 0.85);
   stencilText(ctx, 'LOT 14', 128, 178, 24, STENCIL, 0.65);
+  return worldTexture(canvas, true);
+}
+
+/**
+ * The weapon crate's sides: the same planks painted olive drab, worn back to wood at the edges, with "ARMS" and a
+ * lot number stenciled in faded pale paint.
+ */
+export function createArmsCrateTexture(): CanvasTexture {
+  const p = paintCrateFace(191);
+  const noise = tileNoise(193);
+  for (let y = 0; y < p.height; y++) {
+    for (let x = 0; x < p.width; x++) {
+      // Paint over the wood, thinner where it has rubbed through near the frame edges.
+      const edge = Math.min(x, y, p.width - 1 - x, p.height - 1 - y);
+      const wear = smoothstep(0.55, 0.85, tileFbm(noise, x, y, p.width, 6, 3)) * (edge < 26 ? 0.8 : 0.35);
+      p.blend(x, y, OLIVE, 0.82 * (1 - wear));
+    }
+  }
+  weather(p, 197, 0.12, 4);
+  groundDirt(p, 199, 40, 0.4);
+  const canvas = p.toCanvas();
+  const ctx = context2d(canvas);
+  stencilText(ctx, 'ARMS', 128, 116, 78, STENCIL_PALE, 0.78);
+  stencilText(ctx, 'LOT 22-B', 128, 176, 22, STENCIL_PALE, 0.6);
   return worldTexture(canvas, true);
 }
 

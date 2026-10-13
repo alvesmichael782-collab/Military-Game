@@ -32,43 +32,52 @@ export interface SoundDef {
   readonly rate?: number;
 }
 
+interface GunSoundOptions {
+  /** Pitch the borrowed recordings are played at (1 = as recorded). */
+  readonly rate: number;
+  /** Reload pitch, if different (the reload animation's key times are timed to it). */
+  readonly reloadRate?: number;
+  readonly volume?: number;
+  /** Folder under weapons/ with this gun's own fire_??, fire_tail and reload files, once it has them. */
+  readonly own?: string;
+}
+
+/**
+ * Fire, fire tail, reload and equip entries for one of the player's guns, as `weapon.<id>.<action>`. Until the gun
+ * has its own recordings it borrows the M4A1's at `rate`; once they exist in src/assets/sounds/weapons/<folder>/,
+ * pass `own: '<folder>'` (and rate 1). Equip sounds always come from the gun's own folder (silent until added).
+ */
+function gunSounds(id: string, { rate, reloadRate = rate, volume = 0.7, own }: GunSoundOptions): Record<string, SoundDef> {
+  const folder = own ?? 'm4a1';
+  const pitch = own ? 1 : rate;
+  const reload = own ? 1 : reloadRate;
+  return {
+    [`weapon.${id}.fire`]: { files: `weapons/${folder}/fire_??`, bus: 'weapons', volume, rate: pitch, pitchJitter: 0.03, volumeJitter: 0.06, maxInstances: 6, spatial: '2d', refDistance: 8 },
+    [`weapon.${id}.fireTail`]: { files: `weapons/${folder}/fire_tail`, bus: 'weapons', volume, rate: pitch, pitchJitter: 0.02, volumeJitter: 0.04, maxInstances: 2, spatial: '2d', refDistance: 8 },
+    [`weapon.${id}.reload`]: { files: `weapons/${folder}/reload`, bus: 'weapons', volume: 0.8, rate: reload, pitchJitter: 0, volumeJitter: 0, maxInstances: 1, spatial: '2d', refDistance: 3 },
+    [`weapon.${id}.equip`]: { files: `weapons/${own ?? id}/equip*`, bus: 'weapons', volume: 0.6, pitchJitter: 0.04, volumeJitter: 0, maxInstances: 1, spatial: '2d' },
+  };
+}
+
 /**
  * Every sound the game can play, by id. Ids read `<kind>.<thing>.<action>`, so new content plugs in by
  * adding a folder of files and an entry here: a gun adds `weapon.<gun>.*` entries, a surface adds
  * `footstep.<surface>`. Entries whose files do not exist yet stay silent (with one warning).
  */
 export const SOUNDS: Readonly<Record<string, SoundDef>> = {
-  // M4A1, the player's rifle.
-  'weapon.m4a1.fire': {
-    files: 'weapons/m4a1/fire_??',
-    bus: 'weapons',
-    volume: 0.7,
-    pitchJitter: 0.03,
-    volumeJitter: 0.06,
-    maxInstances: 6,
-    spatial: '2d',
-    refDistance: 8,
-  },
-  'weapon.m4a1.fireTail': {
-    files: 'weapons/m4a1/fire_tail',
-    bus: 'weapons',
-    volume: 0.7,
-    pitchJitter: 0.02,
-    volumeJitter: 0.04,
-    maxInstances: 2,
-    spatial: '2d',
-    refDistance: 8,
-  },
-  'weapon.m4a1.reload': {
-    files: 'weapons/m4a1/reload',
-    bus: 'weapons',
-    volume: 0.8,
-    pitchJitter: 0,
-    volumeJitter: 0,
-    maxInstances: 1,
-    spatial: '2d',
-    refDistance: 3,
-  },
+  // The player's guns. Each has its own ids; they borrow the M4A1 recordings at their own pitch until they get
+  // their own files (see `gunSounds`).
+  ...gunSounds('m4', { rate: 1, own: 'm4a1' }),
+  ...gunSounds('pistol', { rate: 1.3, volume: 0.6, reloadRate: 1.2 }),
+  ...gunSounds('sg09', { rate: 1.18, volume: 0.65, reloadRate: 1.2 }),
+  ...gunSounds('revolver', { rate: 0.8, volume: 0.8, reloadRate: 0.9 }),
+  ...gunSounds('uzi', { rate: 1.4, volume: 0.6, reloadRate: 1.1 }),
+  // The knife. No files yet: src/assets/sounds/weapons/knife/.
+  'weapon.knife.slash': { files: 'weapons/knife/slash*', bus: 'weapons', volume: 0.7, pitchJitter: 0.08, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
+  'weapon.knife.stab': { files: 'weapons/knife/stab*', bus: 'weapons', volume: 0.75, pitchJitter: 0.06, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
+  'weapon.knife.hitBody': { files: 'weapons/knife/hit_body*', bus: 'weapons', volume: 0.8, pitchJitter: 0.08, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
+  'weapon.knife.hitHard': { files: 'weapons/knife/hit_hard*', bus: 'weapons', volume: 0.7, pitchJitter: 0.1, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
+  'weapon.knife.equip': { files: 'weapons/knife/equip*', bus: 'weapons', volume: 0.6, pitchJitter: 0.04, volumeJitter: 0, maxInstances: 1, spatial: '2d' },
   // MG nest gun. Borrows the M4A1 shots, played lower, until it has its own recordings; the rest are hooks.
   'weapon.mg.fire': {
     files: 'weapons/m4a1/fire_??',

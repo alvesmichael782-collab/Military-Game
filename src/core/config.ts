@@ -19,7 +19,7 @@ export const config = {
     maxPixelRatio: 1,
   },
   /**
-   * Retro render filter: the 3D scene (world and rifle) is drawn at a lower resolution and blown up with nearest
+   * Retro render filter: the 3D scene (world and weapon) is drawn at a lower resolution and blown up with nearest
    * filtering, with slight color quantization. The HTML HUD is never affected. F6 toggles it.
    */
   retro: {
@@ -37,6 +37,13 @@ export const config = {
   keybinds: {
     /** Aim down sights. */
     aim: 'KeyQ',
+    /** Weapon slots: gun 1, gun 2, melee. */
+    slot1: 'Digit1',
+    slot2: 'Digit2',
+    slot3: 'Digit3',
+    /** Cycle the build tool's items and the weapon crate's weapons: previous, next. */
+    cyclePrev: 'ArrowLeft',
+    cycleNext: 'ArrowRight',
   },
   /** Aim down sights, for every weapon. Per-weapon values (pose, zoom, multipliers) live in each weapon's `ads`. */
   ads: {
@@ -148,7 +155,7 @@ export const config = {
     /** Spare plates carried at the start, and the most the player can carry. */
     startingSpares: 3,
     maxSpares: 5,
-    /** Seconds to apply one plate while holding V. The rifle cannot fire meanwhile. */
+    /** Seconds to apply one plate while holding V. The gun or knife in hand cannot be used meanwhile. */
     applyTime: 1,
   },
   camera: {
@@ -168,164 +175,31 @@ export const config = {
       sprintAmplitude: 0.06,
     },
   },
-  rifle: {
-    /** Name shown on the HUD under the ammo count. */
-    displayName: 'M4',
-    /** Damage per bullet. Headshots multiply this when the target has a head zone. 4 body shots or 2 headshots kill a rifleman, 2 body shots a sapper. */
-    damage: 25,
-    headshotMultiplier: 2,
-    roundsPerMinute: 600,
-    magazineSize: 30,
-    reserveAmmo: 120,
-    /**
-     * Seconds to reload, matched to the reload sound (2.07 s, its last sound at 1.35 s). The rifle cannot fire while reloading;
-     * the ammo goes in when the new magazine seats (`reloadAnimation.seatTime`).
-     */
-    reloadTime: 2,
-    /**
-     * Reload animation (see `WeaponReloadAnimation`), timed to reload.mp3. Measured clicks in the sound:
-     * 0.188 s magazine released (rattle until about 0.5 s), 1.016 s new magazine in the well, 1.192 s seated.
-     * Times in seconds from the start of the reload, angles in degrees, distances in meters (view model space).
-     */
-    reloadAnimation: {
-      /**
-       * The rifle tilts and rolls toward the player and dips, from the start until `tiltEnd`: muzzle up and to the
-       * left, canted clockwise so the magwell turns toward the player. Little dip, so the magwell stays on screen.
-       */
-      tiltEnd: 0.15,
-      tiltPitch: 10,
-      tiltYaw: 15,
-      tiltRoll: -22,
-      tiltDip: 0.01,
-      /** The magazine is released and falls out of the well, then is hidden once it has fallen `dropDistance`. */
-      releaseTime: 0.19,
-      dropSpeed: 0.6,
-      dropGravity: 6,
-      dropDistance: 0.3,
-      /** A fresh magazine rises from `newMagDepth` below the well to `insertDepth` below it, tipped forward by `newMagTilt`. */
-      newMagStart: 0.4,
-      newMagEnd: 0.9,
-      newMagDepth: 0.3,
-      insertDepth: 0.045,
-      newMagTilt: 14,
-      /** It slides into the well from `insertTime`, and seats at `seatTime` (the ammo goes in at that moment). */
-      insertTime: 1.01,
-      seatTime: 1.19,
-      /** Seating: the magazine bumps up by `seatBump` and the rifle jolts up and back, over `seatJoltTime`. */
-      seatBump: 0.006,
-      seatJoltLift: 0.012,
-      seatJoltPitch: 3,
-      seatJoltTime: 0.12,
-      /** The rifle turns back to normal, overshooting slightly (`settleOvershoot`, 0 for none) before it settles. */
-      returnStart: 1.2,
-      returnEnd: 2,
-      settleOvershoot: 1.4,
-      /**
-       * The left hand leaves the handguard at `handReachStart`, takes the magazine as it is released, rides down
-       * with it and back up with the new one, and after seating returns to the handguard between
-       * `handReturnStart` and `handReturnEnd`.
-       */
-      handReachStart: 0.02,
-      handReturnStart: 1.26,
-      handReturnEnd: 1.6,
-    },
-    /** Sound bank ids (see core/audio/sounds.ts). */
-    sounds: {
-      fire: 'weapon.m4a1.fire',
-      fireTail: 'weapon.m4a1.fireTail',
-      reload: 'weapon.m4a1.reload',
-    },
-    /** Maximum bullet range, in meters. */
-    range: 300,
-    /** Inaccuracy as the half-angle of a cone, in degrees. */
-    spread: {
-      standing: 0.25,
-      crouching: 0.1,
-      /** Added at walk speed; scales with speed, so sprinting adds more. */
-      moving: 1.8,
-      /** Added while airborne. */
-      airborne: 5,
-      /** Added per shot during sustained fire, up to `maxBloom`. */
-      bloomPerShot: 0.18,
-      maxBloom: 2,
-      /** How quickly bloom recovers after firing, in degrees per second. */
-      bloomRecovery: 6,
-      /** How quickly the crosshair follows the spread (higher = faster). */
-      crosshairSpeed: 14,
-    },
-    /** Counter-Strike-style recoil. Angles in degrees. The first bullet always goes where you aim. */
-    recoil: {
-      /** Upward kick per shot while the climb lasts. */
-      kickUp: 0.7,
-      /** Shots that climb at the full rate before the climb flattens out. */
-      climbShots: 9,
-      /** Upward kick per shot once the climb has flattened. */
-      plateauKickUp: 0.08,
-      /** Highest the view climbs above where you aimed. */
-      maxPitch: 7,
-      /** Horizontal drift begins on this shot (0 = first shot). */
-      driftStartShot: 4,
-      /** Peak horizontal drift either side of center, standing or walking. Starts to the right. */
-      driftAmplitude: 0.8,
-      /** Shots for each left or right swing of the drift. */
-      driftSwingShots: 9,
-      /** Seconds after letting go of the trigger before the view starts to settle. */
-      recoverDelay: 0.08,
-      /** How quickly the view settles back once you stop firing (higher = faster). */
-      recoverSpeed: 9,
-      /** Seconds without firing before the pattern restarts from the first shot. */
-      patternResetTime: 0.3,
-      /** Scales the whole pattern (kick, drift and climb cap) by stance. Standing and walking use 1. */
-      crouchingScale: 0.5,
-      /** Sprinting or airborne. */
-      mobileScale: 2,
-    },
+  /**
+   * Shared weapon settings. Each weapon's own stats (damage, fire rate, recoil, ADS, reload, price...) live in its
+   * def file in src/player/weapons/defs/.
+   */
+  weapons: {
+    /** The only weapon the player spawns with (a def id). */
+    startingWeapon: 'pistol',
     viewModel: {
-      /** How far the rifle kicks back per shot, in meters, and how much it tips up, in degrees. */
-      kickBack: 0.045,
-      kickPitch: 2.2,
-      /** How quickly the kick settles (higher = faster). */
-      kickRecovery: 16,
       /** Side-to-side and vertical sway while moving, in meters. */
       bobAmplitude: 0.012,
-      /** How far the rifle drags behind mouse movement, in radians per pixel, and the cap. */
+      /** How far the weapon drags behind mouse movement, in radians per pixel, and the cap. */
       lookSway: 0.0006,
       maxLookSway: 0.06,
       /** Seconds the muzzle flash stays on screen. */
       muzzleFlashTime: 0.05,
-      /** Seconds after the last shot before a sprinting player lowers the rifle back to the carry pose. */
+      /** Seconds after the last shot (or knife attack) before a sprinting player lowers the weapon back to the carry pose. */
       sprintCarryDelay: 0.25,
-      /** How quickly the rifle snaps up from the sprint carry to fire, and settles back into it (higher = faster). */
+      /** How quickly the weapon snaps up from the sprint carry to fire, and settles back into it (higher = faster). */
       sprintRaiseSpeed: 22,
       sprintLowerSpeed: 8,
-    },
-    /** Aim down sights (see `WeaponAdsStats`). */
-    ads: {
-      /**
-       * View model pose when fully aimed, in the weapon camera's space (meters, radians). Fitted to m4.fbx so the
-       * rear aperture (model 0, 0.144, 0.167) and the front post tip (-0.004, 0.153, -0.206) both sit on the
-       * screen center; z sets the eye relief (rear aperture 0.16 m from the eye; closer and the carry handle fills the view).
-       */
-      viewPosition: { x: 0.00195, y: -0.14812, z: -0.32345 },
-      viewRotation: { x: -0.02491, y: -0.01045, z: 0 },
-      /** Horizontal field of view when fully aimed, in degrees at 4:3 (hip is `camera.fov`). 53.13 is exactly 2x zoom from 90. */
-      fov: 53.13,
-      /** Seconds to go from the hip to fully aimed, and back. */
-      transitionTime: 0.2,
-      /** Multipliers when fully aimed, blended in over the transition. */
-      spreadMultiplier: 0.3,
-      recoilMultiplier: 0.6,
-      moveSpeedMultiplier: 0.6,
-      /** View model mouse sway and walking bob. */
-      swayMultiplier: 0.2,
-      bobMultiplier: 0.2,
-      /** Muzzle position relative to the eye when fully aimed, in meters, for the muzzle light and tracers. */
-      muzzle: { forward: 0.7, right: 0, down: 0.05 },
     },
   },
   /** The MG nest's machine gun, fired by mounting it (see `player/MgMount.ts`). */
   mg: {
-    /** Name shown on the HUD in place of the rifle's while mounted. */
+    /** Name shown on the HUD in place of the weapon's while mounted. */
     displayName: 'MG',
     /** The player can mount from behind the gun, within this distance of its grips, in meters. */
     mountRange: 1.5,
@@ -445,6 +319,8 @@ export const config = {
       wall: 125,
       mgNest: 750,
       armorPlate: 300,
+      /** The weapon crate structure. Weapon prices live in each weapon's def. */
+      weaponCrate: 100,
     },
     /** Fraction of the price refunded when the player removes a structure they built. */
     refundFraction: 0.5,
@@ -469,6 +345,8 @@ export const config = {
     reach: 8,
     /** Most MG nests allowed at once. */
     maxMgNests: 1,
+    /** Most weapon crates allowed at once. */
+    maxWeaponCrates: 1,
     /** Most wall segments alive at once (instanced mesh capacity). */
     maxWalls: 400,
   },
@@ -511,11 +389,13 @@ export const config = {
     },
     /**
      * Structure damage per damage type, times the hit's damage. Bullets barely scratch (a rifle needs 100 rounds
-     * for a wall); explosions hit in full. The outpost core takes damage as it comes, without these.
+     * for a wall); explosions hit in full; a knife next to nothing (about 110 slashes for a wall). The outpost core
+     * takes damage as it comes, without these.
      */
     damageMultipliers: {
       ballistic: 0.12,
       explosive: 1,
+      melee: 0.05,
     },
     /** Breached walls' bullet colliders leave this fraction of each hole's width and height open (the ragged rim stays solid). */
     holeColliderScale: 0.8,
@@ -565,6 +445,8 @@ export const config = {
     cashPerHp: {
       wall: 0.21,
       mgNest: 0.6,
+      /** Never damaged, so never repaired. */
+      weaponCrate: 0,
     },
     /** Repairs are paid up front in steps of this many dollars, so cash ticks down instead of flickering every frame. */
     chargeStep: 5,
@@ -577,7 +459,19 @@ export const config = {
     /** How close the player must be, looking at it, to use it, in meters. */
     useRange: 2.5,
   },
+  /**
+   * The weapon crate: a temporary buildable shop (1 x 1 cell, not damageable). Look at it within `useRange`, the left and
+   * right arrows (`keybinds.cyclePrev` / `cycleNext`) pick a weapon, press E to buy it (or refill one already owned), in any phase.
+   */
+  weaponCrate: {
+    useRange: 2.5,
+    /** The floating copy of the selected weapon: height of its center above the ground, in meters, and turn speed in radians per second. */
+    displayHeight: 1.1,
+    displaySpin: 0.9,
+  },
   hud: {
+    /** How quickly the crosshair follows the weapon's spread (higher = faster). */
+    crosshairSpeed: 14,
     /** The magazine count turns red at or below this fraction of a full magazine. */
     lowAmmoFraction: 0.25,
     /** Cash popups that can be on screen at once (pool size). */
@@ -740,7 +634,7 @@ export const config = {
   },
   debug: {
     /**
-     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, L, M, N, U, 7, 8, 9, 0), the debug overlay and enemy
+     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, L, M, N, U (refill every gun), 7, 8, 9, 0), the debug overlay and enemy
      * view, the playtest log (console wave summaries, F8 and the JSON saved at game over) and the console logging.
      * Turn off for release.
      */

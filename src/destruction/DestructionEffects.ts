@@ -13,9 +13,9 @@ const SAND = new Color(0xa89a6a);
 
 /** How big a cloud each structure type throws up: footprint radius and height, in meters. */
 function extentOf(type: StructureType): { radius: number; height: number } {
-  return type === 'wall'
-    ? { radius: config.build.cellSize / 2, height: config.structures.wall.height }
-    : { radius: config.build.cellSize, height: 0.9 };
+  if (type === 'wall') return { radius: config.build.cellSize / 2, height: config.structures.wall.height };
+  if (type === 'weaponCrate') return { radius: config.build.cellSize / 2, height: 0.7 };
+  return { radius: config.build.cellSize, height: 0.9 };
 }
 
 /**
