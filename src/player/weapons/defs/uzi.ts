@@ -87,7 +87,8 @@ export const uzi: GunDef = {
     rearSight: { x: 0, y: 0.148, z: 0.11 },
     frontSight: { x: 0, y: 0.1435, z: -0.105 },
     eyeRelief: 0.2,
-    fov: 70,
+    // Exactly 2x zoom from 90.
+    fov: 53.13,
     transitionTime: 0.18,
     spreadMultiplier: 0.5,
     recoilMultiplier: 0.7,

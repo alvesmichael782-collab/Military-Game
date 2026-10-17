@@ -71,7 +71,8 @@ export const revolver: GunDef = {
     rearSight: { x: 0, y: 0.0885, z: 0.07 },
     frontSight: { x: 0, y: 0.0905, z: -0.175 },
     eyeRelief: 0.4,
-    fov: 70,
+    // Exactly 2x zoom from 90.
+    fov: 53.13,
     transitionTime: 0.2,
     spreadMultiplier: 0.35,
     recoilMultiplier: 0.8,

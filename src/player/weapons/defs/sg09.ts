@@ -84,7 +84,8 @@ export const sg09: GunDef = {
     rearSight: { x: 0.0035, y: 0.0666, z: 0.08 },
     frontSight: { x: 0.0035, y: 0.0668, z: -0.1 },
     eyeRelief: 0.4,
-    fov: 75,
+    // Exactly 2x zoom from 90.
+    fov: 53.13,
     transitionTime: 0.17,
     spreadMultiplier: 0.45,
     recoilMultiplier: 0.75,

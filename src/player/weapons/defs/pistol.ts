@@ -85,7 +85,8 @@ export const pistol: GunDef = {
     frontSight: { x: 0, y: 0.0685, z: -0.09 },
     // Arms out: sights 0.4 m from the eye keep the hands below them.
     eyeRelief: 0.4,
-    fov: 75,
+    // Exactly 2x zoom from 90.
+    fov: 53.13,
     transitionTime: 0.16,
     spreadMultiplier: 0.45,
     recoilMultiplier: 0.75,
