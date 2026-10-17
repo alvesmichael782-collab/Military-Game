@@ -120,11 +120,11 @@ export class BuildTool {
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, enabled: boolean): void {
     if (!enabled) return;
-    if (input.wasPressed('KeyB')) this.wantToggle = true;
+    if (input.wasActionPressed('buildMode')) this.wantToggle = true;
     if (!this.active) return;
-    if (input.wasPressed('Mouse0')) this.wantPlace = true;
-    if (input.wasPressed('KeyF')) this.wantRemove = true;
-    if (input.wasPressed('KeyR')) this.turns++;
+    if (input.wasActionPressed('place')) this.wantPlace = true;
+    if (input.wasActionPressed('remove')) this.wantRemove = true;
+    if (input.wasActionPressed('rotate')) this.turns++;
     this.scroll += input.cycleSteps;
   }
 

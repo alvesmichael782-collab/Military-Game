@@ -2,6 +2,7 @@ import type { EventBus, GameEvents } from '../../core/EventBus';
 import { Phase } from '../../core/GameState';
 import { setFixedDigits } from './digits';
 import { pop } from './motion';
+import type { PromptKeys } from './PromptKeys';
 import './PhaseBanner.css';
 
 /** The countdown turns red and ticks over the last seconds of the build phase. */
@@ -24,12 +25,16 @@ export class PhaseBanner {
   private timeText = '';
   private remaining = 0;
 
-  constructor(events: EventBus<GameEvents>, parent: HTMLElement) {
+  constructor(events: EventBus<GameEvents>, parent: HTMLElement, keys: PromptKeys) {
     this.root.className = 'hud-phase';
     this.title.className = 'hud-phase__title';
     this.value.className = 'hud-phase__timer';
     this.hint.className = 'hud-phase__hint';
-    this.hint.textContent = '-  Press Enter to start';
+    const setHint = (): void => {
+      this.hint.textContent = `-  Press ${keys.name('startWave')} to start`;
+    };
+    setHint();
+    keys.onChange(setHint);
     this.root.append(this.title, this.value, this.hint);
     parent.append(this.root);
 

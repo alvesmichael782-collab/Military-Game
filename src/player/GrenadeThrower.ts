@@ -40,7 +40,7 @@ export class GrenadeThrower {
 
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, active: boolean): void {
-    if (active && input.wasPressed('KeyG')) this.requested = true;
+    if (active && input.wasActionPressed('grenade')) this.requested = true;
   }
 
   /** Returns true on the frame a grenade is thrown. */

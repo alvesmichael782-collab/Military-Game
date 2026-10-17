@@ -77,7 +77,7 @@ export class RepairTool {
 
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, enabled: boolean): void {
-    this.held = enabled && input.isDown('KeyE');
+    this.held = enabled && input.isActionDown('interact');
   }
 
   /**

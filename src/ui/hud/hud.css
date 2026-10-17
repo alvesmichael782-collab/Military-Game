@@ -20,11 +20,14 @@
   --font-wave: 'Permanent Marker', cursive;
   --font-hud: 'Oswald', 'Arial Narrow', sans-serif;
 
+  /* The UI size picked in the pause menu (1 at the standard 3x). Set from motion.ts. */
+  --ui-scale: 1;
+
   /*
-   * One pixel of the 1920x1080 reference, so sizes can be copied straight from UI-Model.jpg.
+   * One pixel of the 1920x1080 reference, so sizes can be copied straight from UI-Model.jpg, times the UI size.
    * Scales with height, but shrinks on unusually narrow windows so the two bottom corners never meet.
    */
-  --rp: min(calc(100vh / 1080), calc(100vw / 1200));
+  --rp: min(calc(100vh / 1080 * var(--ui-scale)), calc(100vw / 1200));
 
   --hud-white: #ece6da;
   --hud-red: #b8141c;

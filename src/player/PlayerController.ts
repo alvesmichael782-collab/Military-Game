@@ -176,12 +176,12 @@ export class PlayerController {
       intent.crouch = false;
       return;
     }
-    intent.forward = (input.isDown('KeyW') ? 1 : 0) - (input.isDown('KeyS') ? 1 : 0);
-    intent.right = (input.isDown('KeyD') ? 1 : 0) - (input.isDown('KeyA') ? 1 : 0);
-    intent.sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight');
-    intent.crouch = input.isDown('ControlLeft') || input.isDown('ControlRight') || input.isDown('KeyC');
+    intent.forward = (input.isActionDown('moveForward') ? 1 : 0) - (input.isActionDown('moveBack') ? 1 : 0);
+    intent.right = (input.isActionDown('moveRight') ? 1 : 0) - (input.isActionDown('moveLeft') ? 1 : 0);
+    intent.sprint = input.isActionDown('sprint');
+    intent.crouch = input.isActionDown('crouch');
     // Latched as a short buffer so a press is never lost between fixed steps.
-    if (input.wasPressed('Space')) this.jumpBuffer = config.player.jumpBufferTime;
+    if (input.wasActionPressed('jump')) this.jumpBuffer = config.player.jumpBufferTime;
   }
 
   /**

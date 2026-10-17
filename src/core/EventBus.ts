@@ -8,6 +8,7 @@ import type { EnemyCallout, EnemyType } from '../enemies/EnemyType';
 import type { Cell, Edge } from '../world/BuildGrid';
 import type { SlotType, WeaponSounds } from '../player/weapons/defs/WeaponDef';
 import type { Phase } from './GameState';
+import type { BindingMap } from './Keybinds';
 
 export interface PhaseChangedEvent {
   /** Previous phase, or null for the initial entry into BUILD. */
@@ -494,6 +495,22 @@ export interface MgHeatChangedEvent {
   overheated: boolean;
 }
 
+export interface KeybindsChangedEvent {
+  /** Every action's primary and alternate key ('' when unbound). A snapshot, safe to keep. */
+  binds: BindingMap;
+}
+
+export interface UiScaleChangedEvent {
+  /** The UI size picked, 1 to 5 (1x to 5x). */
+  level: number;
+  /** Multiplier on the reference HUD size (1 at the standard size). */
+  scale: number;
+}
+
+export interface PauseChangedEvent {
+  paused: boolean;
+}
+
 /** Map of every game event name to its payload type. */
 export interface GameEvents {
   phaseChanged: PhaseChangedEvent;
@@ -579,6 +596,10 @@ export interface GameEvents {
   mgBurstEnded: Record<string, never>;
   mgOverheated: Record<string, never>;
   mgHeatChanged: MgHeatChangedEvent;
+  keybindsChanged: KeybindsChangedEvent;
+  uiScaleChanged: UiScaleChangedEvent;
+  /** The game stopped or went on: the pause menu opened or closed (also before the first click into the game). */
+  pauseChanged: PauseChangedEvent;
 }
 
 type Handler<T> = (payload: T) => void;

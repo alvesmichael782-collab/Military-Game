@@ -24,7 +24,7 @@ const TAN_HALF_VIEW_FOV = Math.tan(MathUtils.degToRad(VIEW_FOV) / 2);
 
 /**
  * The weapons in the player's hands. Owns the loadout (see `Loadout` for the slot rules), switches between slots
- * (keys from `config.keybinds`) by putting the current weapon away and drawing the next, routes fire, reload and
+ * (keys from `Keybinds`) by putting the current weapon away and drawing the next, routes fire, reload and
  * aim input to the weapon in hand, and drives the view model.
  *
  * Weapons are only usable once fully drawn. Switching cancels any reload and drops the aim. Building, repairing
@@ -99,8 +99,8 @@ export class WeaponManager {
     }
     const ready = this.motion === 'ready' && this.inHand !== null;
     const weapon = this.inHand;
-    weapon?.setTrigger(active && ready && input.isDown('Mouse0'));
-    if (active && ready && input.wasPressed('KeyR')) weapon?.reload();
+    weapon?.setTrigger(active && ready && input.isActionDown('fire'));
+    if (active && ready && input.wasActionPressed('reload')) weapon?.reload();
     const gun = weapon instanceof Gun ? weapon : null;
     // Only a gun that is fully out can aim, and not while it reloads.
     this.ads.handleInput(input, active && ready && gun !== null, gun?.isReloading ?? false, sprintHeld);

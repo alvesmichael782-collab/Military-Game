@@ -59,9 +59,9 @@ export class PlayerArmor {
     return taken;
   }
 
-  /** Call once per rendered frame, before `input.endFrame()`. Hold V to apply plates. */
+  /** Call once per rendered frame, before `input.endFrame()`. Hold the plate key (V) to apply plates. */
   handleInput(input: Input, active: boolean): void {
-    this.held = active && input.isDown('KeyV');
+    this.held = active && input.isActionDown('applyPlate');
   }
 
   /** Advance plating. `alive` false cancels it. */

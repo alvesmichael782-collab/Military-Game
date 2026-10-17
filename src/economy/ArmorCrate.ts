@@ -65,7 +65,7 @@ export class ArmorCrate {
 
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, enabled: boolean): void {
-    if (enabled && input.wasPressed('KeyE')) this.wantBuy = true;
+    if (enabled && input.wasActionPressed('interact')) this.wantBuy = true;
   }
 
   /** Check whether the player is looking at the crate, update the prompt, and handle E. */

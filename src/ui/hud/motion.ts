@@ -14,7 +14,15 @@ export function pop(element: Element, from = 1.14, duration = 260): void {
   element.animate([{ transform: `scale(${from})` }, { transform: 'scale(1)' }], { duration, easing: EASE_OUT });
 }
 
+let uiScale = 1;
+
+/** Apply the UI size from the pause menu (`config.ui.scales`) to everything sized in reference pixels. */
+export function setUiScale(scale: number): void {
+  uiScale = scale;
+  document.documentElement.style.setProperty('--ui-scale', String(scale));
+}
+
 /** One reference pixel in CSS pixels right now. Must match `--rp` in hud.css; WAAPI keyframes need plain pixels. */
 export function referencePixel(): number {
-  return Math.min(window.innerHeight / 1080, window.innerWidth / 1200);
+  return Math.min((window.innerHeight / 1080) * uiScale, window.innerWidth / 1200);
 }

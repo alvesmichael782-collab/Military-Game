@@ -11,6 +11,7 @@ const MAX_FRAME_DELTA = 0.25;
 /**
  * Fixed-timestep simulation driven by requestAnimationFrame.
  * Simulation always advances in `config.physics.step` increments; rendering runs once per frame.
+ * While `isPaused()` is true no fixed steps run and the render gets a frame delta of 0, so the world holds still.
  */
 export class GameLoop {
   private accumulator = 0;
@@ -21,6 +22,7 @@ export class GameLoop {
   constructor(
     private readonly fixedUpdate: FixedUpdate,
     private readonly render: RenderUpdate,
+    private readonly isPaused: () => boolean = () => false,
   ) {}
 
   start(): void {
@@ -42,8 +44,9 @@ export class GameLoop {
 
     const step = config.physics.step;
     // The first frame's timestamp can be earlier than `start()` ran; never step time backwards.
-    const frameDt = Math.min(Math.max(0, (now - this.lastTime) / 1000), MAX_FRAME_DELTA);
+    let frameDt = Math.min(Math.max(0, (now - this.lastTime) / 1000), MAX_FRAME_DELTA);
     this.lastTime = now;
+    if (this.isPaused()) frameDt = 0;
     this.accumulator += frameDt;
 
     let steps = 0;

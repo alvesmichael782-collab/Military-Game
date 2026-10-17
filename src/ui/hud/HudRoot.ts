@@ -13,12 +13,14 @@ import { HitMarker } from './HitMarker';
 import { InteractPrompt } from './InteractPrompt';
 import { MountPrompt } from './MountPrompt';
 import { PhaseBanner } from './PhaseBanner';
+import { PromptKeys } from './PromptKeys';
 import { RepairPrompt } from './RepairPrompt';
 import { ShopPrompt } from './ShopPrompt';
 import { SparePlates } from './SparePlates';
 import { WaveNumber } from './WaveNumber';
 import { WaveSummary } from './WaveSummary';
 import { WeaponName } from './WeaponName';
+import { setUiScale } from './motion';
 import './hud.css';
 
 /**
@@ -33,6 +35,9 @@ export class HudRoot {
   constructor(events: EventBus<GameEvents>, parent: HTMLElement = document.body) {
     const root = document.createElement('div');
     root.className = 'hud';
+    // Everything sized in reference pixels (HUD and pause menu) follows the UI size picked in the menu.
+    events.on('uiScaleChanged', ({ scale }) => setUiScale(scale));
+    const keys = new PromptKeys(events);
 
     this.cash = new CashCounter(events, root);
     new CashPopups(events, this.cash.popupAnchor);
@@ -54,14 +59,14 @@ export class HudRoot {
     const prompts = document.createElement('div');
     prompts.className = 'hud-prompts';
     root.append(prompts);
-    new BuildPrompt(events, prompts);
-    new InteractPrompt(events, prompts);
-    new MountPrompt(events, prompts);
-    new RepairPrompt(events, prompts);
-    new ShopPrompt(events, prompts);
-    new PhaseBanner(events, root);
-    new WaveSummary(events, root);
-    new EndScreen(events, root);
+    new BuildPrompt(events, prompts, keys);
+    new InteractPrompt(events, prompts, keys);
+    new MountPrompt(events, prompts, keys);
+    new RepairPrompt(events, prompts, keys);
+    new ShopPrompt(events, prompts, keys);
+    new PhaseBanner(events, root, keys);
+    new WaveSummary(events, root, keys);
+    new EndScreen(events, root, keys);
     parent.append(root);
   }
 

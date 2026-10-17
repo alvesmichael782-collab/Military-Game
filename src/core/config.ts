@@ -31,19 +31,48 @@ export const config = {
     colorBits: 6,
   },
   /**
-   * Rebindable controls. Each is a `KeyboardEvent.code` ("KeyQ") or a mouse button
-   * ("Mouse0" left, "Mouse1" middle, "Mouse2" right). Read through `Input.isActionDown` / `wasActionPressed`.
+   * Default controls, each as [primary, alternate] ('' for none). The player rebinds them in the pause menu
+   * (saved in the browser, see `core/Keybinds.ts`). A key is a `KeyboardEvent.code` ("KeyQ"), with left and right
+   * modifiers merged ("Shift", "Control", "Alt"), or a mouse button ("Mouse0" left, "Mouse1" middle, "Mouse2" right).
+   * Read through `Input.isActionDown` / `wasActionPressed`.
    */
   keybinds: {
+    moveForward: ['KeyW', ''],
+    moveBack: ['KeyS', ''],
+    moveLeft: ['KeyA', ''],
+    moveRight: ['KeyD', ''],
+    sprint: ['Shift', ''],
+    crouch: ['Control', 'KeyC'],
+    jump: ['Space', ''],
+    fire: ['Mouse0', ''],
     /** Aim down sights. */
-    aim: 'KeyQ',
+    aim: ['KeyQ', ''],
+    reload: ['KeyR', ''],
+    grenade: ['KeyG', ''],
+    /** Hold to apply armor plates. */
+    applyPlate: ['KeyV', ''],
     /** Weapon slots: gun 1, gun 2, melee. */
-    slot1: 'Digit1',
-    slot2: 'Digit2',
-    slot3: 'Digit3',
+    slot1: ['Digit1', ''],
+    slot2: ['Digit2', ''],
+    slot3: ['Digit3', ''],
+    /** Buy at the crates, hold to repair, mount the MG. */
+    interact: ['KeyE', ''],
+    /** Start the wave early in the build phase, skip the wave summary, restart after the game ends. */
+    startWave: ['Enter', ''],
+    buildMode: ['KeyB', ''],
+    place: ['Mouse0', ''],
+    rotate: ['KeyR', ''],
+    /** Remove a structure, clear rubble. */
+    remove: ['KeyF', ''],
     /** Cycle the build tool's items and the weapon crate's weapons: previous, next. */
-    cyclePrev: 'ArrowLeft',
-    cycleNext: 'ArrowRight',
+    cyclePrev: ['ArrowLeft', ''],
+    cycleNext: ['ArrowRight', ''],
+  },
+  ui: {
+    /** The UI size choices 1x to 5x in the pause menu, as multipliers of the reference HUD size. 3x is the standard size. */
+    scales: [0.6, 0.8, 1, 1.2, 1.4],
+    /** The choice used until the player picks one (1-based, so 3 is 3x). */
+    defaultScale: 3,
   },
   /** Aim down sights, for every weapon. Per-weapon values (pose, zoom, multipliers) live in each weapon's `ads`. */
   ads: {

@@ -80,7 +80,7 @@ export class MgMount {
 
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, enabled: boolean): void {
-    if (enabled && input.wasPressed('KeyE')) this.wantToggle = true;
+    if (enabled && input.wasActionPressed('interact')) this.wantToggle = true;
   }
 
   /**

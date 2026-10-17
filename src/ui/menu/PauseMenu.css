@@ -1,0 +1,318 @@
+/*
+ * Pause menu, in the style of 2001-2004 shooter menus: square bevelled panels, khaki text, one red accent.
+ * Sized in menu pixels (--mu): one pixel at 1080p times the UI size, kept between a readable floor and what fits.
+ */
+.menu {
+  --mu: clamp(0.7px, calc(100vh / 1080 * var(--ui-scale, 1)), min(calc(100vh / 760), calc(100vw / 1000)));
+  --font-menu: Tahoma, Verdana, 'Segoe UI', sans-serif;
+
+  --menu-backdrop: rgba(8, 7, 5, 0.55);
+  --menu-panel: rgba(30, 28, 22, 0.95);
+  --menu-face: #343026;
+  --menu-face-hover: #4a4436;
+  --menu-well: #12110d;
+  --menu-light: #6f6753;
+  --menu-dark: #0b0a08;
+  --menu-text: #ddd3b8;
+  --menu-text-bright: #f4ecd6;
+  --menu-dim: #9a917a;
+  --menu-accent: var(--hud-red, #b8141c);
+
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--menu-backdrop);
+  color: var(--menu-text);
+  font-family: var(--font-menu);
+  font-size: calc(15 * var(--mu));
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.menu *,
+.menu *::before,
+.menu *::after {
+  box-sizing: border-box;
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.menu__window {
+  width: calc(960 * var(--mu));
+  display: flex;
+  flex-direction: column;
+}
+
+.menu__title {
+  margin: 0 0 calc(14 * var(--mu));
+  font-family: var(--font-hud, 'Oswald', sans-serif);
+  font-size: calc(40 * var(--mu));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: calc(4 * var(--mu));
+  text-transform: uppercase;
+  color: var(--menu-text-bright);
+  text-shadow: 0 calc(2 * var(--mu)) 0 rgba(0, 0, 0, 0.8);
+}
+
+/* Bevels: raised (light top-left) for things you press, sunken (dark top-left) for wells and pressed states. */
+.menu__raised {
+  border: calc(1 * var(--mu)) solid;
+  border-color: var(--menu-light) var(--menu-dark) var(--menu-dark) var(--menu-light);
+}
+
+.menu__sunken {
+  border: calc(1 * var(--mu)) solid;
+  border-color: var(--menu-dark) var(--menu-light) var(--menu-light) var(--menu-dark);
+}
+
+.menu__tabs {
+  display: flex;
+  gap: calc(4 * var(--mu));
+  /* Tabs sit on the panel's top edge. */
+  margin-bottom: calc(-1 * var(--mu));
+  position: relative;
+}
+
+.menu__tab {
+  min-width: calc(150 * var(--mu));
+  padding: calc(9 * var(--mu)) calc(22 * var(--mu)) calc(8 * var(--mu));
+  background: var(--menu-face);
+  color: var(--menu-dim);
+  font-family: var(--font-hud, 'Oswald', sans-serif);
+  font-size: calc(17 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--mu));
+  text-transform: uppercase;
+  border-bottom-color: var(--menu-light);
+  cursor: pointer;
+}
+
+.menu__tab:hover {
+  color: var(--menu-text-bright);
+}
+
+.menu__tab[aria-selected='true'] {
+  background: var(--menu-panel);
+  color: var(--menu-text-bright);
+  border-bottom-color: transparent;
+  box-shadow: inset 0 calc(3 * var(--mu)) 0 var(--menu-accent);
+}
+
+.menu__panel {
+  display: grid;
+  background: var(--menu-panel);
+  padding: calc(22 * var(--mu)) calc(24 * var(--mu)) calc(18 * var(--mu));
+}
+
+.menu__page {
+  grid-area: 1 / 1;
+  visibility: hidden;
+}
+
+.menu__page.is-current {
+  visibility: visible;
+}
+
+.menu__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(8 * var(--mu));
+  margin-top: calc(12 * var(--mu));
+}
+
+.menu__button {
+  min-width: calc(140 * var(--mu));
+  padding: calc(8 * var(--mu)) calc(18 * var(--mu));
+  background: var(--menu-face);
+  color: var(--menu-text);
+  font-family: var(--font-hud, 'Oswald', sans-serif);
+  font-size: calc(16 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--mu));
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu__button--primary {
+  background: var(--menu-accent);
+  color: #fff7ea;
+  border-color: #e0484e #4a0508 #4a0508 #e0484e;
+}
+
+.menu__button:hover,
+.menu__tab:hover,
+.menu__key:hover,
+.menu__choice:hover {
+  background-color: var(--menu-face-hover);
+}
+
+.menu__button--primary:hover {
+  background-color: #cc2028;
+}
+
+/* Pressed: the bevel flips and the label drops a pixel. */
+.menu__button:active,
+.menu__choice:active {
+  border-color: var(--menu-dark) var(--menu-light) var(--menu-light) var(--menu-dark);
+  padding-top: calc(9 * var(--mu));
+  padding-bottom: calc(7 * var(--mu));
+}
+
+.menu button:focus-visible {
+  outline: calc(1 * var(--mu)) dotted var(--menu-text-bright);
+  outline-offset: calc(-4 * var(--mu));
+}
+
+.menu button {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section heading inside a tab: "MOVEMENT", "UI". */
+.menu__heading {
+  margin: 0 0 calc(6 * var(--mu));
+  padding-bottom: calc(4 * var(--mu));
+  border-bottom: calc(1 * var(--mu)) solid var(--menu-light);
+  font-family: var(--font-hud, 'Oswald', sans-serif);
+  font-size: calc(15 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(2.5 * var(--mu));
+  text-transform: uppercase;
+  color: var(--menu-dim);
+}
+
+.menu__hint {
+  min-height: calc(18 * var(--mu));
+  color: var(--menu-dim);
+  font-size: calc(13 * var(--mu));
+}
+
+.menu__hint.is-notice {
+  color: var(--menu-text-bright);
+}
+
+/* ---- Controls tab ---- */
+
+.menu-controls__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: calc(36 * var(--mu));
+}
+
+.menu-controls__column {
+  display: flex;
+  flex-direction: column;
+  gap: calc(18 * var(--mu));
+}
+
+.menu-controls__grid {
+  display: grid;
+  grid-template-columns: 1fr calc(112 * var(--mu)) calc(112 * var(--mu));
+  column-gap: calc(6 * var(--mu));
+  row-gap: calc(4 * var(--mu));
+  align-items: center;
+}
+
+.menu-controls__grid .menu__heading {
+  grid-column: 1 / -1;
+}
+
+.menu-controls__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-controls__colnames {
+  display: grid;
+  grid-template-columns: 1fr calc(112 * var(--mu)) calc(112 * var(--mu));
+  column-gap: calc(6 * var(--mu));
+  margin-bottom: calc(8 * var(--mu));
+  color: var(--menu-dim);
+  font-size: calc(12 * var(--mu));
+  text-transform: uppercase;
+  letter-spacing: calc(1 * var(--mu));
+}
+
+.menu-controls__colnames span:not(:first-child) {
+  text-align: center;
+}
+
+.menu__key {
+  height: calc(26 * var(--mu));
+  padding: 0 calc(6 * var(--mu));
+  background: var(--menu-well);
+  color: var(--menu-text-bright);
+  font-family: var(--font-menu);
+  font-size: calc(13 * var(--mu));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.menu__key.is-waiting {
+  background: var(--menu-accent);
+  color: #fff7ea;
+}
+
+.menu-controls__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(16 * var(--mu));
+  margin-top: calc(18 * var(--mu));
+  padding-top: calc(12 * var(--mu));
+  border-top: calc(1 * var(--mu)) solid var(--menu-dark);
+  box-shadow: 0 calc(-1 * var(--mu)) 0 rgba(111, 103, 83, 0.35);
+}
+
+/* ---- Game tab ---- */
+
+.menu-game {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--mu));
+  max-width: calc(560 * var(--mu));
+}
+
+.menu-game__row {
+  display: grid;
+  grid-template-columns: calc(150 * var(--mu)) auto;
+  align-items: center;
+  column-gap: calc(12 * var(--mu));
+}
+
+.menu-game__choices {
+  display: flex;
+  gap: calc(4 * var(--mu));
+}
+
+.menu__choice {
+  width: calc(58 * var(--mu));
+  height: calc(32 * var(--mu));
+  padding: 0;
+  background: var(--menu-face);
+  color: var(--menu-text);
+  font-family: var(--font-hud, 'Oswald', sans-serif);
+  font-size: calc(16 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(1 * var(--mu));
+  cursor: pointer;
+}
+
+.menu__choice[aria-pressed='true'] {
+  background: var(--menu-accent);
+  color: #fff7ea;
+  border-color: var(--menu-dark) #e0484e #e0484e var(--menu-dark);
+}
+
+.menu-game__note {
+  grid-column: 2;
+  margin-top: calc(6 * var(--mu));
+}

@@ -64,18 +64,8 @@ export interface DebugOverlayState {
   stress: boolean;
 }
 
-/** "KeyQ" -> "Q", "Mouse2" -> "Right mouse". */
-function keyName(code: string): string {
-  const mouse = ['Left mouse', 'Middle mouse', 'Right mouse'];
-  if (code.startsWith('Mouse')) return mouse[Number(code.slice(5))] ?? code;
-  return code.replace(/^(Key|Digit)/, '');
-}
-
 const HELP =
-  'WASD move   Shift sprint   Ctrl/C crouch   Space jump   Esc release mouse\n' +
-  `Left mouse fire   ${config.ads.toggle ? 'Press' : 'Hold'} ${keyName(config.keybinds.aim)} aim   R reload   G grenade   Hold V apply armor plate   E use   Hold E repair\n` +
-  `B build tool: ${keyName(config.keybinds.cyclePrev)}/${keyName(config.keybinds.cycleNext)} to pick, R rotate, left mouse place, F remove or clear rubble   Enter start wave\n` +
-  'E (behind the MG nest gun) mount or dismount   Enter skip the wave summary\n' +
+  'Game controls: Esc pauses; the pause menu lists and rebinds them. Debug keys are fixed:\n' +
   'K: 25 damage   M: earn $50   U: refill ammo and grenades   N: end the wave (in a fight) or next phase   L: force loss\n' +
   'J: 25% damage to the structure under the crosshair\n' +
   '7: spawn rifleman   8: spawn sapper   9: kill all enemies   0: freeze or unfreeze enemy AI\n' +

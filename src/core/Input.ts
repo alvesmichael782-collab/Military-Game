@@ -1,15 +1,19 @@
-import { config } from './config';
+import { canonicalKey, type Action, type Keybinds } from './Keybinds';
 
-/** A rebindable control from `config.keybinds`. */
-export type Action = keyof typeof config.keybinds;
+export type { Action } from './Keybinds';
+
+/** The Keyboard Lock API (not in the TypeScript DOM types yet). */
+interface KeyboardLock {
+  lock?(codes: string[]): Promise<void>;
+}
 
 /** Keys whose browser default (help page, page scroll, focus change) must never fire in game. */
 const ALWAYS_PREVENT = new Set(['F1', 'F3', 'F4', 'F6', 'F8', 'F9', 'Space', 'Tab']);
 
 /**
- * Central input state. Keys are keyed by `KeyboardEvent.code` (layout independent, e.g. "KeyW").
- * Tracks held keys, keys pressed this frame, mouse movement while the pointer is locked,
- * and pointer lock state. Call `endFrame()` once per rendered frame to clear per-frame data.
+ * Central input state. Keys are keyed by `KeyboardEvent.code` (layout independent, e.g. "KeyW"), with left and
+ * right modifiers merged ("Shift", see `canonicalKey`). Tracks held keys, keys pressed this frame, mouse movement
+ * while the pointer is locked, and pointer lock state. Call `endFrame()` once per rendered frame to clear per-frame data.
  */
 export class Input {
   private readonly down = new Set<string>();
@@ -18,14 +22,18 @@ export class Input {
   private _mouseDeltaY = 0;
   private _pointerLocked = false;
 
-  constructor(target: Window = window) {
+  constructor(
+    private readonly keybinds: Keybinds,
+    target: Window = window,
+  ) {
     target.addEventListener('keydown', (e) => {
       // Leave Cmd shortcuts (quit, close tab, etc.) to the browser.
       if (!e.metaKey && (this._pointerLocked || ALWAYS_PREVENT.has(e.code))) e.preventDefault();
-      if (!e.repeat) this.pressed.add(e.code);
-      this.down.add(e.code);
+      const key = canonicalKey(e.code);
+      if (!e.repeat) this.pressed.add(key);
+      this.down.add(key);
     });
-    target.addEventListener('keyup', (e) => this.down.delete(e.code));
+    target.addEventListener('keyup', (e) => this.down.delete(canonicalKey(e.code)));
     // Drop held keys when focus is lost so nothing gets stuck down.
     target.addEventListener('blur', () => this.down.clear());
 
@@ -58,7 +66,7 @@ export class Input {
     });
   }
 
-  /** `code` is a `KeyboardEvent.code` or a mouse button ("Mouse0" is the left button). */
+  /** `code` is a `KeyboardEvent.code` (modifiers merged: "Shift", "Control", "Alt") or a mouse button ("Mouse0" is the left button). */
   isDown(code: string): boolean {
     return this.down.has(code);
   }
@@ -68,14 +76,18 @@ export class Input {
     return this.pressed.has(code);
   }
 
-  /** True while the key or mouse button bound to `action` in `config.keybinds` is held. */
+  /** True while either key or mouse button bound to `action` is held. */
   isActionDown(action: Action): boolean {
-    return this.down.has(config.keybinds[action]);
+    return Input.has(this.down, this.keybinds.keys(action));
   }
 
-  /** True only on the frame the key or mouse button bound to `action` went down. */
+  /** True only on the frame a key or mouse button bound to `action` went down. */
   wasActionPressed(action: Action): boolean {
-    return this.pressed.has(config.keybinds[action]);
+    return Input.has(this.pressed, this.keybinds.keys(action));
+  }
+
+  private static has(keys: Set<string>, binding: readonly [string, string]): boolean {
+    return (binding[0] !== '' && keys.has(binding[0])) || (binding[1] !== '' && keys.has(binding[1]));
   }
 
   /** Horizontal mouse movement this frame, in pixels. Only counts while the pointer is locked. */
@@ -97,10 +109,27 @@ export class Input {
     return this._pointerLocked;
   }
 
-  /** Capture the mouse. Must be called from a user gesture such as a click. */
+  /**
+   * Capture the mouse. Where the browser has Keyboard Lock (Chrome, Edge) this also goes full screen and locks Esc,
+   * so Esc reaches the game instead of the browser and can both pause and resume (hold Esc to leave full screen).
+   * Must be called from a user gesture such as a click, except to resume in full screen after `exitPointerLock()`.
+   */
   requestPointerLock(element: HTMLElement): void {
+    void this.capture(element);
+  }
+
+  private async capture(element: HTMLElement): Promise<void> {
+    const keyboard = (navigator as Navigator & { keyboard?: KeyboardLock }).keyboard;
+    if (keyboard?.lock && !document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        await keyboard.lock(['Escape']);
+      } catch {
+        // Full screen refused (no click to allow it): capture the mouse in the window.
+      }
+    }
     // Raw (unaccelerated) movement where supported, plain lock otherwise.
-    // Rejections (e.g. clicking again right after Esc) are expected and ignored.
+    // Rejections (e.g. clicking again right after Esc in a window) are expected and ignored.
     element.requestPointerLock({ unadjustedMovement: true })?.catch(() => {
       element.requestPointerLock()?.catch(() => {});
     });

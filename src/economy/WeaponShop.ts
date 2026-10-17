@@ -72,7 +72,7 @@ export class WeaponShop {
   /** Call once per rendered frame, before `input.endFrame()`. */
   handleInput(input: Input, enabled: boolean): void {
     if (!enabled) return;
-    if (input.wasPressed('KeyE')) this.wantBuy = true;
+    if (input.wasActionPressed('interact')) this.wantBuy = true;
     this.scroll += input.cycleSteps;
   }
 

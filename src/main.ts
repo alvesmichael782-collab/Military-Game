@@ -23,6 +23,8 @@ import { FpsCounter } from './core/FpsCounter';
 import { GameLoop } from './core/GameLoop';
 import { GameState, Phase } from './core/GameState';
 import { Input } from './core/Input';
+import { Keybinds } from './core/Keybinds';
+import { UiSettings } from './core/UiSettings';
 import { MatchStats } from './core/MatchStats';
 import { PlaytestLog } from './core/PlaytestLog';
 import { profiler } from './core/FrameProfiler';
@@ -54,6 +56,7 @@ import { connectWaveRewards } from './economy/WaveRewards';
 import { WeaponShop } from './economy/WeaponShop';
 import { DebugOverlay, type DebugOverlayState } from './ui/DebugOverlay';
 import { HudRoot } from './ui/hud/HudRoot';
+import { PauseMenu } from './ui/menu/PauseMenu';
 import { StructureHpBar } from './ui/StructureHpBar';
 import { BuildGrid } from './world/BuildGrid';
 import { createDustRidge } from './world/DustRidge';
@@ -100,7 +103,9 @@ async function boot(): Promise<void> {
   const events = new EventBus();
   bindDamageEvents(events);
   const state = new GameState(events);
-  const input = new Input();
+  const keybinds = new Keybinds(events);
+  const input = new Input(keybinds);
+  const uiSettings = new UiSettings(events);
   const sounds = new SoundBank();
   connectCombatSounds(events, sounds);
   connectDestructionSounds(events, sounds);
@@ -133,6 +138,7 @@ async function boot(): Promise<void> {
   const debugCamera = new DebugCamera(canvas);
   const overlay = new DebugOverlay();
   const hud = new HudRoot(events);
+  const menu = new PauseMenu(keybinds, uiSettings, () => input.requestPointerLock(canvas));
   const wallet = new CashWallet(events);
   const crate = new ArmorCrate(scene, physics.world, grid, wallet, events);
   const structures = new StructureManager(scene, physics.world, grid, registry, events);
@@ -183,12 +189,21 @@ async function boot(): Promise<void> {
   connectKillRewards(events, wallet);
   connectWaveRewards(events, wallet);
   // Give the freshly built HUD its starting values.
+  keybinds.announce();
+  uiSettings.announce();
   armor.announce();
   health.announce();
   wallet.announce();
   weapons.announce();
   thrower.announce();
   let playerActive = false;
+  /**
+   * The game is paused whenever the mouse is free during play: Esc (or leaving the window) releases it and opens
+   * the pause menu. Before the first click it is paused too, behind the "click to play" prompt.
+   */
+  const isPaused = (): boolean => !debugView && !input.pointerLocked && !state.isOver;
+  let paused = false;
+  let started = false;
   const shake = new ScreenShake(events, fpsCamera.camera);
   // Refreshed every frame; `eye` and `velocity` are live references.
   const aim = {
@@ -225,6 +240,13 @@ async function boot(): Promise<void> {
 
   canvas.addEventListener('click', () => {
     if (!debugView && !state.isOver) input.requestPointerLock(canvas);
+  });
+  // Esc toggles the pause menu. In full screen the game owns Esc (see `Input.requestPointerLock`); in a window the
+  // browser takes the first Esc to free the mouse and only a click can capture it again, so there Resume is a click.
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Escape' || e.repeat || debugView || state.isOver) return;
+    if (input.pointerLocked) input.exitPointerLock();
+    else if (menu.isOpen) input.requestPointerLock(canvas);
   });
   // Ctrl-click is a right click on macOS; never open the context menu over the game.
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -296,8 +318,16 @@ async function boot(): Promise<void> {
   };
 
   const render = (frameDt: number, alpha: number): void => {
-    if (config.debug.enabled) handleDebugKeys();
-    if (input.wasPressed('Enter')) {
+    if (input.pointerLocked) started = true;
+    if (isPaused() !== paused) {
+      paused = !paused;
+      sounds.setPaused(paused);
+      events.emit('pauseChanged', { paused });
+    }
+    menu.setOpen(paused && started);
+    // Keys typed in the menu never reach the game.
+    if (config.debug.enabled && !paused) handleDebugKeys();
+    if (!paused && input.wasActionPressed('startWave')) {
       if (state.phase === Phase.BUILD) state.startWaveEarly();
       else if (state.phase === Phase.AFTERMATH) state.skipAftermath();
       else if (state.isOver) window.location.reload();
@@ -327,7 +357,7 @@ async function boot(): Promise<void> {
     const canShop = playing && !buildTool.isActive && !mounted;
     shop.handleInput(input, canShop);
     mount.handleInput(input, playing && !buildTool.isActive);
-    mg.setTrigger(playing && mounted && !armor.isPlating && input.isDown('Mouse0'));
+    mg.setTrigger(playing && mounted && !armor.isPlating && input.isActionDown('fire'));
     const lookX = playing ? input.mouseDeltaX : 0;
     const lookY = playing ? input.mouseDeltaY : 0;
     if (playing) fpsCamera.look(lookX, lookY, weapons.ads.lookScale);
@@ -401,7 +431,7 @@ async function boot(): Promise<void> {
 
     fps.tick(frameDt);
     hud.update(frameDt);
-    overlay.setClickPrompt(!debugView && !input.pointerLocked && !state.isOver);
+    overlay.setClickPrompt(paused && !started);
     // The readout is only built while the overlay is up, so a hidden overlay costs nothing per frame.
     if (overlay.visible) overlay.update({
       phase: state.phase,
@@ -458,14 +488,14 @@ async function boot(): Promise<void> {
   // Dev-only handle for automated playtests and console poking. Stripped from production builds.
   if (import.meta.env.DEV) {
     Object.assign(window, {
-      __game: { applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
+      __game: { menu, keybinds, uiSettings, applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
     });
   }
 
   // Everything is built: keep each shadow depth material on one shader (see ShadowDepth.ts).
   separateInstancedShadowDepth(scene);
   state.start();
-  new GameLoop(fixedUpdate, render).start();
+  new GameLoop(fixedUpdate, render, isPaused).start();
   if (stress && new URLSearchParams(window.location.search).has('stress')) stress.toggle();
 }
 

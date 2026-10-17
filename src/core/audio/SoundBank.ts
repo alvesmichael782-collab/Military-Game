@@ -115,6 +115,14 @@ export class SoundBank {
     return count;
   }
 
+  /** Freeze every playing sound where it is while the game is paused (new plays are dropped), and carry on after. */
+  setPaused(paused: boolean): void {
+    const context = Howler.ctx;
+    if (!context) return;
+    if (paused && context.state === 'running') context.suspend().catch(() => undefined);
+    else if (!paused && context.state === 'suspended') context.resume().catch(() => undefined);
+  }
+
   /** True if the id exists and has at least one file to play. */
   has(id: string): boolean {
     return (this.entries.get(id)?.variants.length ?? 0) > 0;
