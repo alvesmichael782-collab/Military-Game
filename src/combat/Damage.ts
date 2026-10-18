@@ -13,6 +13,11 @@ export interface DamageInfo {
   source?: DamageSource;
   /** True when a bullet hit a head zone. The caller has already applied the headshot multiplier. */
   headshot?: boolean;
+  /**
+   * What fired the shot (an enemy), so repeated hits from one attacker can be told apart from another's.
+   * Left out for blasts and anything else without a lasting shooter.
+   */
+  attacker?: object;
 }
 
 let events: EventBus<GameEvents> | null = null;
@@ -35,7 +40,7 @@ export function applyDamage(
 ): boolean {
   if (!target.isAlive || amount <= 0) return false;
 
-  target.takeDamage(amount, type, position);
+  target.takeDamage(amount, type, position, info);
   const killed = !target.isAlive;
 
   events?.emit('damageDealt', {

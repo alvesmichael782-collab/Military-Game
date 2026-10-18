@@ -9,8 +9,9 @@ const TAIL_CROSSFADE_MS = 10;
 const RELOAD_STOP_FADE_MS = 40;
 
 /**
- * Plays the player's weapon (guns and knife), grenade and explosion sounds from combat events. Weapon events carry the
- * weapon's sound ids, so any gun plays its own set with no changes here. The player's gun plays flat (2D).
+ * Plays the player's weapon (guns and knife), grenade and explosion sounds from combat events, plus the armor shatter and
+ * low-health heartbeat. Weapon events carry the weapon's sound ids, so any gun plays its own set with no changes here.
+ * The player's gun plays flat (2D).
  */
 export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundBank): void {
   let lastShot: SoundHandle = 0;
@@ -51,6 +52,8 @@ export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundB
     const id = surface === 'flesh' || surface === 'target' ? set.hitBody : set.hitHard;
     if (id) sounds.play(id);
   });
+  events.on('armorBroken', () => sounds.play('player.armor.shatter'));
+  events.on('heartbeat', ({ strength }) => sounds.play('player.heartbeat', { volume: 0.5 + 0.5 * strength }));
   events.on('grenadeBounced', ({ position }) => sounds.play('grenade.bounce', { position }));
   events.on('explosion', ({ position, kind }) => {
     // Satchels fall back to the frag blast until they have their own recording.

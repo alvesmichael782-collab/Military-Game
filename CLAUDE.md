@@ -147,6 +147,14 @@ Copy the HUD in `References/UI reference/UI-Model.jpg` as closely as possible: s
 - A small minimal crosshair and hit marker in the center (not styled after the Game Reference images).
 - The debug overlay, now hidden by default and toggled with F3.
 
+**Damage Feedback** (allowed HUD elements for damage the player takes; all values in `config.damageFeedback`)
+- Every `playerDamaged` event carries where the hit came from (`position`: the shooter's eye position for bullets, the blast center for grenades and satchels), `armorDamage` and `healthDamage`, and `attacker` (the enemy that fired, or null for blasts). `armorBroken` fires when armor goes from above 0 to 0.
+- **Directional indicators** (`src/ui/hud/DamageIndicators.ts`): early-2000s style flat bars curving along an invisible ring around the screen center (radius about 18% of screen height), each spanning about 52 degrees of the ring and thinning toward its ends. Drawn as a low-res sprite scaled up with hard pixel edges: flat, semi-transparent color, no outline, no glow, a fade in hard steps. Not run through the retro filter. It points at where the hit came from and keeps tracking as the player turns or moves (ahead = top, behind = bottom). Blue when the armor took the hit, red when any of it reached health. Opacity and thickness scale with damage; holds about 0.5 s, fades over about 1.5 s. Repeat hits from one attacker refresh and strengthen its wedge; other attackers and every blast get their own. Up to 8, pooled.
+- **Camera jolt** (`src/player/HitJolt.ts`): an additive camera offset like ScreenShake (never moves the aim), pushing the view the way the shot travelled with a little pitch, yaw and roll, scaled by damage, recovering in about 0.2 s. Weaker while aiming down sights or mounted on the MG.
+- **Armor shatter** (`src/ui/hud/ArmorShatter.ts`): when the last plate breaks, a procedural broken-glass crack pattern over the whole screen radiating from the side of the breaking hit (bright impact point, branching cracks, a few light blue shards with white highlights). Snaps in with a short blue-white flash, holds about 0.4 s, fades over about 1 s. A few layouts are generated at startup. Sound hook `player.armor.shatter`.
+- **Low health** (`src/ui/hud/LowHealthOverlay.ts`, levels from `src/core/LowHealthLevels.ts`): below 50% health, dark procedural blood splatter and smears creep in from the edges and corners with a dark red vignette, and the 3D scene blurs toward the edges (in the retro filter's pass, never the HUD). Below 25% it gets clearly worse: blood reaches further in, the vignette darkens, the blur grows toward the center, colors desaturate, and it pulses with a heartbeat (about 1 per second, sound hook `player.heartbeat`). Scales smoothly and fades out when health rises.
+- All of these sit under the HUD's numbers and bars, so those stay readable. Debug: Shift+K deals a test hit from a random direction.
+
 No emojis anywhere in the UI.
 
 ## Tech Stack

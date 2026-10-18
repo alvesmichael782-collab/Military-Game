@@ -508,6 +508,97 @@ export const config = {
     /** Seconds a "+$100" popup stays: about 2 s fully visible, then it drifts up and fades over the last second. */
     cashPopupLifetime: 3,
   },
+  /**
+   * Feedback for damage the player takes: direction wedges on a ring around the crosshair, a camera jolt, the
+   * screen shatter when the last armor plate breaks, and blood, blur and a heartbeat at low health.
+   */
+  damageFeedback: {
+    indicators: {
+      /** Radius of the invisible ring the wedges sit on, as a fraction of the screen height. */
+      ringRadius: 0.18,
+      /**
+       * Each indicator is a flat bar curving along the ring, drawn as a low-res sprite: the arc it spans, in degrees,
+       * its thickness in the middle as a fraction of the ring radius (weakest and strongest hit), and the fraction of
+       * that thickness left at its ends.
+       */
+      arcDegrees: 52,
+      minThickness: 0.12,
+      maxThickness: 0.21,
+      endThickness: 0.35,
+      /** Sprite resolution: one sprite pixel is this fraction of the screen height (1/240 is about 4.5 px at 1080p). */
+      pixelSize: 1 / 240,
+      /** The fade runs in this many hard steps, like an old sprite's alpha. */
+      fadeSteps: 6,
+      /** Opacity of the weakest and strongest hit. */
+      minOpacity: 0.35,
+      maxOpacity: 0.75,
+      /** A hit this big (after any earlier hits on the same wedge add up) shows at full strength. */
+      fullStrengthDamage: 40,
+      /** A repeat hit from the same attacker adds this fraction of its own strength to the wedge's. */
+      repeatGain: 0.6,
+      /** Seconds a wedge stays at full opacity, then takes to fade out. */
+      holdTime: 0.5,
+      fadeTime: 1.5,
+      /** Wedges on screen at once (pool size). The faintest is reused when all are taken. */
+      maxWedges: 8,
+      /** Hit on armor, hit on health. Flat colors, no outline, no glow. */
+      armorColor: '#3d7fe0',
+      healthColor: '#cc1f1a',
+    },
+    jolt: {
+      /** Degrees of kick per point of damage, and the most one hit gives (bullets, then blasts). */
+      degreesPerDamage: 0.1,
+      maxDegrees: 1.5,
+      explosiveDegreesPerDamage: 0.06,
+      explosiveMaxDegrees: 4,
+      /** Share of the kick that goes into pitch, yaw and roll. */
+      pitch: 0.8,
+      yaw: 0.7,
+      roll: 1.2,
+      /** Spring stiffness of the recovery: the kick peaks after 1/speed seconds and is gone by about 5/speed. */
+      recoverSpeed: 24,
+      /** Jolt scale while aiming down sights and while mounted on the MG. */
+      adsScale: 0.4,
+      mountedScale: 0.35,
+    },
+    shatter: {
+      /** Seconds the cracks stay fully visible, then take to fade out, and the length of the blue-white flash. */
+      holdTime: 0.4,
+      fadeTime: 1,
+      flashTime: 0.18,
+      flashOpacity: 0.55,
+      /** Crack layouts generated at startup; one is picked at random each time. */
+      layouts: 4,
+      /** The impact point sits this far in from the screen edge on the hit's side, as a fraction of the screen. */
+      edgeInset: 0.12,
+      crackColor: '#f4fbff',
+      shardTint: '#9fd2ff',
+    },
+    lowHealth: {
+      /** Health fractions: blood and blur start below `wounded` and get clearly worse below `critical`. */
+      wounded: 0.5,
+      critical: 0.25,
+      /** Effect strength just under `wounded` (it grows to 1 at `critical`), and the critical effect's just under `critical`. */
+      woundedOnset: 0.45,
+      criticalOnset: 0.4,
+      /** How quickly the shown effect follows health (higher = faster), so it fades in and out instead of jumping. */
+      easeSpeed: 3,
+      /** Heartbeats per second while critical, and how much a beat swells the effect. */
+      pulseRate: 1,
+      pulseAmount: 0.35,
+      /** Edge blur on the 3D scene, in low-resolution pixels: wounded, then critical on top. */
+      blurWounded: 1.6,
+      blurCritical: 3.2,
+      /** Clear radius in the middle of the screen (fraction of the half height): wounded and critical. */
+      clearRadiusWounded: 0.55,
+      clearRadiusCritical: 0.3,
+      /** Color lost when fully critical, 0..1. */
+      desaturation: 0.55,
+      /** Peak vignette opacity, wounded and critical. */
+      vignetteWounded: 0.45,
+      vignetteCritical: 0.8,
+    },
+  },
   enemies: {
     /** Pool size: the most enemies alive (or lying dead) at once. Nothing is created or destroyed during play. */
     maxActive: 40,
@@ -663,13 +754,14 @@ export const config = {
   },
   debug: {
     /**
-     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, L, M, N, U (refill every gun), 7, 8, 9, 0), the debug overlay and enemy
-     * view, the playtest log (console wave summaries, F8 and the JSON saved at game over) and the console logging.
+     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, Shift+K, L, M, N, U (refill every gun), 7, 8, 9, 0), the debug overlay and enemy
+     * view, the playtest log (console wave summaries, and F8 saves the run as JSON) and the console logging.
      * Turn off for release.
      */
     enabled: true,
-    /** Damage dealt by the K test key. */
+    /** Damage dealt by the K test key (Shift+K: the same hit from a random direction, `testHitDistance` meters away). */
     testDamage: 25,
+    testHitDistance: 12,
     /** Cash earned by the M test key, in dollars. */
     testCash: 50,
     /** The J test key takes this fraction of the aimed-at structure's max HP. */

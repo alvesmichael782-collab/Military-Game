@@ -20,13 +20,39 @@ export interface PhaseChangedEvent {
 export interface PlayerDamagedEvent {
   amount: number;
   type: DamageType;
-  /** Where the damage came from. A copy, safe to keep. */
+  /**
+   * Where the damage came from: the shooter's eye position for bullets, the blast center for grenades and satchels.
+   * A copy, safe to keep.
+   */
   position: Vector3;
+  /** How much of `amount` the armor plates took, and how much went into health. */
   armorDamage: number;
   healthDamage: number;
   /** Armor and health after the hit. */
   armor: number;
   health: number;
+  /** What fired the shot (an enemy), the same object for each of its hits; null for blasts and debug hits. */
+  attacker: object | null;
+}
+
+/** The player's last armor plate broke: armor went from above 0 to 0. */
+export interface ArmorBrokenEvent {
+  /** Where the breaking hit came from (see `PlayerDamagedEvent.position`). A copy, safe to keep. */
+  position: Vector3;
+}
+
+/** Where the player is looking from, sent once per rendered frame for HUD elements that point at places in the world. */
+export interface PlayerViewEvent {
+  /** Camera position. Only valid while the event dispatches; copy to keep. */
+  position: Vector3;
+  /** Camera heading in radians, as `FPSCamera.yaw`: 0 looks down -Z, positive turns left. */
+  yaw: number;
+}
+
+/** One beat of the low-health heartbeat, while health is critical. */
+export interface HeartbeatEvent {
+  /** 0..1, how strong the critical effect is right now. */
+  strength: number;
 }
 
 export interface ArmorChangedEvent {
@@ -515,6 +541,9 @@ export interface PauseChangedEvent {
 export interface GameEvents {
   phaseChanged: PhaseChangedEvent;
   playerDamaged: PlayerDamagedEvent;
+  armorBroken: ArmorBrokenEvent;
+  playerView: PlayerViewEvent;
+  heartbeat: HeartbeatEvent;
   playerDied: PlayerDiedEvent;
   armorChanged: ArmorChangedEvent;
   plateApplied: PlateAppliedEvent;

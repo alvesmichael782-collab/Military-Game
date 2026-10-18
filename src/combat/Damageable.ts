@@ -1,5 +1,6 @@
 import type { Vector3 } from 'three';
 import type { ImpactSurface } from '../core/EventBus';
+import type { DamageInfo } from './Damage';
 import type { DamageType } from './DamageType';
 
 /** Broad category of a damageable thing, so listeners can tell the player apart from what they shoot. */
@@ -18,6 +19,6 @@ export interface Damageable {
   blastDistance?(point: Vector3): number;
   /** What a bullet hitting it throws up. Without it, a hit counts as 'target'. */
   readonly impactSurface?: ImpactSurface;
-  /** `position` is where the damage came from (hit point or blast center). */
-  takeDamage(amount: number, type: DamageType, position: Vector3): void;
+  /** `position` is where the damage came from (hit point or blast center). `info` is what `applyDamage` was given. */
+  takeDamage(amount: number, type: DamageType, position: Vector3, info?: DamageInfo): void;
 }

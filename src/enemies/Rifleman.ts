@@ -542,8 +542,9 @@ export class Rifleman extends Enemy {
     ctx.events.emit('enemyFired', { type: this.type, muzzle: this.muzzle, end: this.end });
 
     if (hit.collider.handle === ctx.player.colliderHandle) {
-      // Armor plates absorb it first. The hit comes from the muzzle, for anything that shows where.
-      applyDamage(ctx.player.damageable, r.damage, 'ballistic', this.muzzle, { source: 'enemy' });
+      // Armor plates absorb it first. The hit comes from the eyes (where the shot was aimed from), for the HUD's
+      // damage direction and the camera jolt; `attacker` lets repeat hits from this rifleman share one indicator.
+      applyDamage(ctx.player.damageable, r.damage, 'ballistic', this.eyePos, { source: 'enemy', attacker: this });
       return;
     }
     const hitbox = ctx.registry.hitboxOf(hit.collider);

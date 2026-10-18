@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import type { DamageInfo } from '../combat/Damage';
 import type { Damageable } from '../combat/Damageable';
 import type { DamageType } from '../combat/DamageType';
 import { config } from '../core/config';
@@ -57,10 +58,11 @@ export class PlayerHealth implements Damageable {
     return this._health <= 0;
   }
 
-  /** `position` is where the damage came from. */
-  takeDamage(amount: number, type: DamageType, position: Vector3): void {
+  /** `position` is where the damage came from: the shooter's eyes, or the blast center. */
+  takeDamage(amount: number, type: DamageType, position: Vector3, info: DamageInfo = {}): void {
     if (this.isDead || amount <= 0) return;
 
+    const armorBefore = this.armor.armor;
     const armorDamage = this.armor.absorb(amount);
     const healthDamage = Math.min(this._health, amount - armorDamage);
     this._health -= healthDamage;
@@ -73,7 +75,9 @@ export class PlayerHealth implements Damageable {
       healthDamage,
       armor: this.armor.armor,
       health: this._health,
+      attacker: info.attacker ?? null,
     });
+    if (armorBefore > 0 && this.armor.armor <= 0) this.events.emit('armorBroken', { position: position.clone() });
     if (healthDamage > 0) this.announce();
     if (this.isDead) this.events.emit('playerDied', { type });
   }

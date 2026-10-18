@@ -306,6 +306,28 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     refDistance: 14,
   },
 
+  // The player's damage feedback. No files yet: src/assets/sounds/player/.
+  /** The last armor plate breaks. */
+  'player.armor.shatter': {
+    files: 'player/armor_shatter*',
+    bus: 'effects',
+    volume: 0.9,
+    pitchJitter: 0.04,
+    volumeJitter: 0.05,
+    maxInstances: 1,
+    spatial: '2d',
+  },
+  /** One heartbeat while health is critical. */
+  'player.heartbeat': {
+    files: 'player/heartbeat*',
+    bus: 'effects',
+    volume: 0.8,
+    pitchJitter: 0,
+    volumeJitter: 0,
+    maxInstances: 2,
+    spatial: '2d',
+  },
+
   /** Hammering and scraping while the player repairs a structure. */
   'repair.loop': {
     files: 'repair/repair_loop*',

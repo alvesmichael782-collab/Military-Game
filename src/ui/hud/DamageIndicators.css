@@ -1,0 +1,13 @@
+/*
+ * The damage direction sprite, centered on the crosshair. Drawn at low resolution and scaled up with hard pixel
+ * edges, like an early-2000s HUD sprite. Sized from config (a fraction of the screen height).
+ */
+.hud-damage-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ring-size);
+  height: var(--ring-size);
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+}

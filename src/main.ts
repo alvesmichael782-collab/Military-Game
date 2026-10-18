@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
+import { MathUtils, PCFShadowMap, Scene, Vector3, WebGLRenderer } from 'three';
 import { BuildTool } from './build/BuildTool';
 import { loadMgGunModel } from './build/MgGunAsset';
 import { OutpostCore } from './build/OutpostCore';
@@ -24,6 +24,7 @@ import { GameLoop } from './core/GameLoop';
 import { GameState, Phase } from './core/GameState';
 import { Input } from './core/Input';
 import { Keybinds } from './core/Keybinds';
+import { LowHealthLevels } from './core/LowHealthLevels';
 import { UiSettings } from './core/UiSettings';
 import { MatchStats } from './core/MatchStats';
 import { PlaytestLog } from './core/PlaytestLog';
@@ -40,6 +41,7 @@ import type { AimState } from './player/Aim';
 import { Footsteps } from './player/Footsteps';
 import { FPSCamera } from './player/FPSCamera';
 import { GrenadeThrower } from './player/GrenadeThrower';
+import { HitJolt } from './player/HitJolt';
 import { MgMount } from './player/MgMount';
 import { PlayerArmor } from './player/PlayerArmor';
 import { PlayerController } from './player/PlayerController';
@@ -205,6 +207,12 @@ async function boot(): Promise<void> {
   let paused = false;
   let started = false;
   const shake = new ScreenShake(events, fpsCamera.camera);
+  const jolt = new HitJolt(events, fpsCamera);
+  // The retro filter's half of the low-health effect (edge blur, color loss); the HUD owns the blood. Beats sound here.
+  const lowHealth = new LowHealthLevels(events, (strength) => events.emit('heartbeat', { strength }));
+  /** Reused for every `playerView` event; listeners copy what they keep. */
+  const viewEvent = { position: fpsCamera.camera.position, yaw: 0 };
+  const testHitFrom = new Vector3();
   // Refreshed every frame; `eye` and `velocity` are live references.
   const aim = {
     eye: fpsCamera.camera.position,
@@ -288,7 +296,17 @@ async function boot(): Promise<void> {
   /** The test keys. Only while `config.debug.enabled`. */
   const handleDebugKeys = (): void => {
     if (input.wasPressed('F1')) toggleDebugView();
-    if (input.wasPressed('KeyK')) applyDamage(health, config.debug.testDamage, 'ballistic', player.position);
+    if (input.wasPressed('KeyK')) {
+      if (input.isDown('Shift')) {
+        // Shift+K: a test hit from a random direction around the player, from shooter eye height.
+        const angle = Math.random() * Math.PI * 2;
+        const p = player.position;
+        testHitFrom.set(p.x + Math.cos(angle) * config.debug.testHitDistance, p.y + config.enemies.eyeHeight, p.z + Math.sin(angle) * config.debug.testHitDistance);
+        applyDamage(health, config.debug.testDamage, 'ballistic', testHitFrom);
+      } else {
+        applyDamage(health, config.debug.testDamage, 'ballistic', player.position);
+      }
+    }
     if (input.wasPressed('KeyU')) {
       weapons.refillAll();
       thrower.refill();
@@ -382,7 +400,10 @@ async function boot(): Promise<void> {
     fpsCamera.headBobScale = ads.headBobScale;
     player.setAim(ads.aiming, weapons.moveSpeedScale);
     shake.update(frameDt);
-    fpsCamera.setShake(shake.pitch, shake.yaw, shake.roll);
+    // The hit jolt is gentler while aiming down sights or mounted on the MG.
+    const j = config.damageFeedback.jolt;
+    jolt.update(frameDt, mount.mounted ? j.mountedScale : MathUtils.lerp(1, j.adsScale, ads.amount));
+    fpsCamera.setShake(shake.pitch + jolt.pitch, shake.yaw + jolt.yaw, shake.roll + jolt.roll);
     buildTool.update(aim);
     // E is shared by the armor crate, the weapon crate, repairs and the MG: the closest one the player is looking at gets it.
     const canRepair = playing && !armor.isPlating && !mount.mounted;
@@ -413,6 +434,17 @@ async function boot(): Promise<void> {
     smoke.update(frameDt);
     enemyDebug.update();
     effects.update(frameDt);
+
+    viewEvent.yaw = fpsCamera.yaw;
+    events.emit('playerView', viewEvent);
+    lowHealth.update(frameDt);
+    const l = config.damageFeedback.lowHealth;
+    const swell = 1 + l.pulseAmount * (lowHealth.pulse - 0.4 * lowHealth.critical);
+    retro.setVision(
+      (lowHealth.wounded * l.blurWounded + lowHealth.critical * l.blurCritical) * swell,
+      MathUtils.lerp(l.clearRadiusWounded, l.clearRadiusCritical, lowHealth.critical),
+      Math.min(1, lowHealth.critical * l.desaturation * swell),
+    );
 
     fpsCamera.camera.getWorldDirection(listenerForward);
     sounds.setListener(fpsCamera.camera.position, listenerForward, fpsCamera.camera.up);
@@ -488,7 +520,7 @@ async function boot(): Promise<void> {
   // Dev-only handle for automated playtests and console poking. Stripped from production builds.
   if (import.meta.env.DEV) {
     Object.assign(window, {
-      __game: { menu, keybinds, uiSettings, applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
+      __game: { jolt, lowHealth, menu, keybinds, uiSettings, applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
     });
   }
 
