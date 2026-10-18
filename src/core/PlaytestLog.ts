@@ -101,7 +101,7 @@ function duration(seconds: number): string {
  * Records a playtest run from game events only: per wave, what spawned and died and how, the damage the player
  * took and from what, plates, cash in and out by reason, walls built, lost and repaired, the core's HP and the
  * sappers' satchels; per run, how far it got, how it ended and how long it took. Prints a short summary of each
- * wave to the console when the wave is over, and saves the whole run as JSON on request (F8) and at game over.
+ * wave to the console when the wave is over, and saves the whole run as JSON on request (F8).
  */
 export class PlaytestLog {
   private readonly run: RunRecord;
@@ -151,9 +151,8 @@ export class PlaytestLog {
       this.run.wavesReached = wave;
       this.print(this.current);
       console.info(
-        `[playtest] Run over: ${this.run.result}, wave ${wave}, ${this.run.wavesCleared} cleared, ${duration(this.run.totalSeconds)}. F8 saves the log again.`,
+        `[playtest] Run over: ${this.run.result}, wave ${wave}, ${this.run.wavesCleared} cleared, ${duration(this.run.totalSeconds)}. F8 saves the log.`,
       );
-      this.download();
     });
 
     events.on('enemySpawned', ({ type }) => this.current.enemies.spawned[type]++);

@@ -1,13 +1,13 @@
 # Last Stand Fortress: playtest guide (M9)
 
-Play **5 full runs**, one per plan below. Each run takes about 20-35 minutes. After each run, send me the JSON file the game saves.
+Play **5 full runs**, one per plan below. Each run takes about 20-35 minutes. After each run, press **F8** on the end screen and send me the JSON file it saves.
 
 ## Before you start
 
 - Run `npm run dev` and open the address it prints in Chrome (the run log and the F3 frame readout need Chrome).
 - Keep `config.debug.enabled` on (it is on now). That turns on the run log, F8, F3 and the test keys.
 - **Don't use the test keys** (J, K, L, M, N, U, 7, 8, 9, 0, F9) during a run. They distort the numbers. Enter is fine: it starts a wave early and skips the wave summary.
-- **The run log:** at game over, win or lose, the game saves `last-stand-run-<date>-<time>.json` to your Downloads folder by itself. Press **F8** to save it at any other moment, for example if you quit partway through. Each wave also prints a short summary to the browser console (Cmd+Option+J).
+- **The run log:** press **F8** to save `last-stand-run-<date>-<time>.json` to your Downloads folder, at game over (win or lose) or at any other moment, for example if you quit partway through. The game no longer saves it by itself. Each wave also prints a short summary to the browser console (Cmd+Option+J).
 - **Performance:** press **F3** now and then to see the frame time. On a MacBook Air, `FRAME` should stay near 16.7 ms. If it doesn't, note the wave and what was on screen.
 
 ## The five runs
