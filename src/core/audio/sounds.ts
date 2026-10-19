@@ -72,13 +72,13 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
   ...gunSounds('sg09', { rate: 1.18, volume: 0.65, reloadRate: 1.2 }),
   ...gunSounds('revolver', { rate: 0.8, volume: 0.8, reloadRate: 0.9 }),
   ...gunSounds('uzi', { rate: 1.4, volume: 0.6, reloadRate: 1.1 }),
-  // The knife. No files yet: src/assets/sounds/weapons/knife/.
+  // The knife (Kenney CC0 recordings, see src/assets/sounds/CREDITS.md).
   'weapon.knife.slash': { files: 'weapons/knife/slash*', bus: 'weapons', volume: 0.7, pitchJitter: 0.08, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
   'weapon.knife.stab': { files: 'weapons/knife/stab*', bus: 'weapons', volume: 0.75, pitchJitter: 0.06, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
   'weapon.knife.hitBody': { files: 'weapons/knife/hit_body*', bus: 'weapons', volume: 0.8, pitchJitter: 0.08, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
   'weapon.knife.hitHard': { files: 'weapons/knife/hit_hard*', bus: 'weapons', volume: 0.7, pitchJitter: 0.1, volumeJitter: 0.1, maxInstances: 2, spatial: '2d' },
   'weapon.knife.equip': { files: 'weapons/knife/equip*', bus: 'weapons', volume: 0.6, pitchJitter: 0.04, volumeJitter: 0, maxInstances: 1, spatial: '2d' },
-  // MG nest gun. Borrows the M4A1 shots, played lower, until it has its own recordings; the rest are hooks.
+  // MG nest gun. Borrows the M4A1 shots and tail, played lower, until it has its own recordings.
   'weapon.mg.fire': {
     files: 'weapons/m4a1/fire_??',
     bus: 'weapons',
@@ -91,7 +91,8 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     refDistance: 10,
   },
   'weapon.mg.fireTail': {
-    files: 'weapons/mg/fire_tail',
+    files: 'weapons/m4a1/fire_tail',
+    rate: 0.78,
     bus: 'weapons',
     volume: 0.8,
     pitchJitter: 0.02,
@@ -118,7 +119,7 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     maxInstances: 1,
     spatial: '2d',
   },
-  // Any gun without its own dry-fire click. No file yet.
+  // Any gun without its own dry-fire click.
   'weapon.dryFire': {
     files: 'weapons/dry_fire',
     bus: 'weapons',
@@ -153,7 +154,7 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     refDistance: 4,
   },
 
-  // Grenades and explosions. No files yet.
+  // Grenades and explosions.
   'grenade.bounce': {
     files: 'effects/grenade_bounce*',
     bus: 'effects',
@@ -175,7 +176,7 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     refDistance: 12,
   },
 
-  // Destruction: crack, rumble, debris. No files yet.
+  // Destruction: crack, rumble, debris.
   /** A bullet hitting a wall. */
   'destruction.wall.hit': {
     files: 'destruction/wall_hit*',
@@ -220,9 +221,9 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     spatial: '3d',
     refDistance: 4,
   },
-  // Enemies. No files yet.
+  // Enemies. Footsteps borrow the player's gravel steps; the voice callouts have no files yet.
   'enemy.footstep': {
-    files: 'enemies/footstep*',
+    files: 'footsteps/gravel/step_*',
     bus: 'footsteps',
     volume: 0.5,
     pitchJitter: 0.08,
@@ -306,7 +307,7 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     refDistance: 14,
   },
 
-  // The player's damage feedback. No files yet: src/assets/sounds/player/.
+  // The player's damage feedback.
   /** The last armor plate breaks. */
   'player.armor.shatter': {
     files: 'player/armor_shatter*',
