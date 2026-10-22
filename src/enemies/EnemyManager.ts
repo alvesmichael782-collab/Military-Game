@@ -52,6 +52,10 @@ export class EnemyManager {
   private windowStart = 0;
   private _pathRate = 0;
   private readonly from = new Vector3();
+  /** Multiplayer client: the host runs the AI; these soldiers only show what the host's snapshots say. */
+  private replica = false;
+  /** Uniform color of each soldier slot, for the host's snapshots. */
+  private readonly uniforms: number[] = [];
 
   constructor(
     scene: Scene,
@@ -61,7 +65,7 @@ export class EnemyManager {
     private readonly events: EventBus<GameEvents>,
     structures: StructureManager,
     explosions: Explosions,
-    player: PlayerTarget,
+    players: readonly PlayerTarget[],
     core: CoreTarget,
     private readonly spawnPoints: readonly Vector3[],
   ) {
@@ -76,7 +80,7 @@ export class EnemyManager {
       grid,
       registry,
       events,
-      player,
+      players,
       core,
       sight: this.sight,
       satchels: this.satchels,
@@ -102,12 +106,44 @@ export class EnemyManager {
       }
     });
     events.on('navCellsChanged', ({ cells, blocked }) => this.scheduleRepath(blocked ? cells : null));
-    events.on('damageDealt', ({ target, amount, source, headshot, killed }) => {
-      if (!(target instanceof Enemy)) return;
+    events.on('damageDealt', ({ target, amount, source, headshot, killed, player, routed }) => {
+      // A routed hit was sent to the host, which reports the kill.
+      if (!(target instanceof Enemy) || routed) return;
       const position = target.currFeet.clone();
-      if (killed) events.emit('enemyKilled', { id: target.slot, type: target.type, position, source, headshot });
+      if (killed) events.emit('enemyKilled', { id: target.slot, type: target.type, position, source, headshot, killer: player });
       else events.emit('enemyDamaged', { id: target.slot, type: target.type, position, amount, hp: target.hp, maxHp: target.maxHp, source, headshot });
     });
+  }
+
+  /** Multiplayer client: stop all AI; the soldiers are driven by `replica*` calls from the host's snapshots. */
+  setReplica(on: boolean): void {
+    this.replica = on;
+  }
+
+  /** The pooled soldier in renderer slot `slot`, if any. */
+  bySlot(slot: number): Enemy | undefined {
+    return this.all[slot];
+  }
+
+  /** The uniform color soldier `slot` was given at its last spawn. */
+  uniformOf(slot: number): number {
+    return this.uniforms[slot] ?? UNIFORM_COLORS.tan;
+  }
+
+  /** Multiplayer client: bring soldier `slot` in as the host's. */
+  replicaSpawn(slot: number, at: Vector3, yaw: number, uniform: number): Enemy | undefined {
+    const enemy = this.all[slot];
+    if (!enemy) return undefined;
+    if (enemy.active) this.release(enemy);
+    enemy.replicaSpawn(at, yaw);
+    this.renderer.setUniform(slot, uniform);
+    return enemy;
+  }
+
+  /** Multiplayer client: the host no longer has soldier `slot` on the field. */
+  replicaRelease(slot: number): void {
+    const enemy = this.all[slot];
+    if (enemy?.active) this.release(enemy);
   }
 
   /** Every pooled enemy, for the debug view. */
@@ -163,7 +199,9 @@ export class EnemyManager {
     const core = this.ctx.core.base;
     enemy.spawn(position, Math.atan2(core.x - position.x, core.z - position.z));
     // Riflemen come in desert tan or olive, picked per soldier; sappers have their own darker kit.
-    this.renderer.setUniform(enemy.slot, type === 'sapper' ? UNIFORM_COLORS.sapper : Math.random() < 0.5 ? UNIFORM_COLORS.tan : UNIFORM_COLORS.olive);
+    const uniform = type === 'sapper' ? UNIFORM_COLORS.sapper : Math.random() < 0.5 ? UNIFORM_COLORS.tan : UNIFORM_COLORS.olive;
+    this.uniforms[enemy.slot] = uniform;
+    this.renderer.setUniform(enemy.slot, uniform);
     // Stagger thinking across the pool.
     enemy.thinkTimer = Math.random() * config.enemies.thinkInterval;
     this.retryAt.delete(enemy);
@@ -196,7 +234,7 @@ export class EnemyManager {
 
   /** Movement for one fixed step, with separation steering. Call before the physics step. */
   fixedUpdate(dt: number): void {
-    if (this._frozen) return;
+    if (this._frozen || this.replica) return;
     const radius = config.enemies.separationRadius;
     const all = this.all;
     for (let i = 0; i < all.length; i++) {
@@ -229,7 +267,10 @@ export class EnemyManager {
   /** Thinking, timers, path searches and drawing. Call once per rendered frame. */
   update(dt: number, alpha: number): void {
     this.sight.beginFrame();
-    if (!this._frozen) {
+    if (this.replica) {
+      // The host's satchels, mirrored here so they blink, beep and blow up (harmlessly) in sync.
+      this.satchels.update(dt);
+    } else if (!this._frozen) {
       this.time += dt;
       this.updateRepath(dt);
       profiler.begin('path');
@@ -269,7 +310,7 @@ export class EnemyManager {
   }
 
   private requestPath(enemy: Enemy): void {
-    if (enemy.pathQueued || !enemy.isAlive) return;
+    if (this.replica || enemy.pathQueued || !enemy.isAlive) return;
     enemy.pathQueued = true;
     this.queue.push(enemy);
   }

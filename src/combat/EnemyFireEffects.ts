@@ -1,6 +1,6 @@
-import { Color } from 'three';
+import { Color, type Vector3 } from 'three';
 import { config } from '../core/config';
-import type { EnemyFiredEvent, EventBus, GameEvents } from '../core/EventBus';
+import type { EventBus, GameEvents } from '../core/EventBus';
 import type { LightFlashes } from './LightFlashes';
 import { createParticleSpec, type ParticleSystem } from './Particles';
 import type { Tracers } from './Tracers';
@@ -14,8 +14,8 @@ const FLASH_SIZE = 0.75;
 const FLASH_TIME = 0.06;
 
 /**
- * What the player sees when an enemy fires: a big orange-yellow star flash at the muzzle that briefly
- * lights the surroundings (when a light is free), and a tracer streak to where the bullet stopped.
+ * What the player sees when an enemy (or, in multiplayer, a teammate) fires: a big orange-yellow star flash at
+ * the muzzle that briefly lights the surroundings (when a light is free), and a tracer streak to where the bullet stopped.
  */
 export class EnemyFireEffects {
   private readonly spec = createParticleSpec();
@@ -26,10 +26,11 @@ export class EnemyFireEffects {
     private readonly tracers: Tracers,
     private readonly lights: LightFlashes,
   ) {
-    events.on('enemyFired', (e) => this.onFired(e));
+    events.on('enemyFired', ({ muzzle, end }) => this.onFired(muzzle, end));
+    events.on('allyFired', ({ muzzle, end }) => this.onFired(muzzle, end));
   }
 
-  private onFired({ muzzle, end }: EnemyFiredEvent): void {
+  private onFired(muzzle: Vector3, end: Vector3 | null): void {
     const s = this.spec;
     s.x = muzzle.x;
     s.y = muzzle.y;
@@ -50,7 +51,7 @@ export class EnemyFireEffects {
     s.angle = Math.random() * Math.PI * 2;
     s.spin = 0;
     this.flashes.spawn(s);
-    this.tracers.add(muzzle, end);
+    if (end) this.tracers.add(muzzle, end);
     const fx = config.effects;
     this.lights.flashIfIdle(muzzle, LIGHT_COLOR, fx.muzzleLightIntensity, fx.muzzleLightRange, LIGHT_DURATION);
   }

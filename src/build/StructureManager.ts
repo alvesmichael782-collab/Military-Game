@@ -13,7 +13,14 @@ import type { Structure } from './Structure';
 import { WallJoints } from './WallJoints';
 import { WallRenderer } from './WallRenderer';
 import { WallSegment } from './WallSegment';
-import { WeaponCrate } from './WeaponCrate';
+import { ShopCrate, type ShopCrateType } from './ShopCrate';
+import { localPlayerId } from '../net/PlayerId';
+
+/** Who builds a structure, and (on a multiplayer client) the id the host gave it. */
+export interface PlacementOrigin {
+  owner?: string;
+  id?: number;
+}
 
 /** Yaw for a wall on an edge: x edges run along +x, z edges along +z. */
 export function wallYaw(edge: Edge): number {
@@ -147,36 +154,36 @@ export class StructureManager {
   }
 
   /** Build a wall on `edge`, clearing any rubble there. The build tool has already checked the spot and taken the cash. */
-  placeWall(edge: Edge, cost: number): Structure {
+  placeWall(edge: Edge, cost: number, origin: PlacementOrigin = {}): Structure {
     const pile = this.rubble.atEdge(edge);
     if (pile) this.clearRubble(pile);
-    const id = this.nextId++;
+    const id = this.takeId(origin);
     const base = this.grid.edgeMidpoint(edge, new Vector3());
     const wall = new WallSegment(id, { ...edge }, base, wallYaw(edge), this.world, (s, a, t, f) => this.handleDamage(s, a, t, f));
-    this.add(wall, cost);
+    this.add(wall, cost, origin);
     if (this.grid.occupyEdge(edge, id)) this.events.emit('navChanged', { edge: { ...edge }, blocked: true });
     this.wallsChanged(edge);
     return wall;
   }
 
   /** Build the MG nest around grid point `anchor`. The build tool has already checked the spot and taken the cash. */
-  placeMgNest(anchor: Cell, yaw: number, cost: number): Structure {
-    const id = this.nextId++;
+  placeMgNest(anchor: Cell, yaw: number, cost: number, origin: PlacementOrigin = {}): Structure {
+    const id = this.takeId(origin);
     const cells = this.footprint(anchor, []);
     const base = new Vector3(this.grid.vertexX(anchor.i), 0, this.grid.vertexZ(anchor.j));
     const nest = new MgNest(id, cells, base, yaw, this.scene, this.world, (s, a, t, f) => this.handleDamage(s, a, t, f));
-    this.add(nest, cost);
+    this.add(nest, cost, origin);
     this.grid.occupy(cells, id, true);
     this.events.emit('navCellsChanged', { cells: cells.map((c) => ({ ...c })), blocked: true });
     return nest;
   }
 
-  /** Put the weapon crate on `cell`. The build tool has already checked the spot and taken the cash. */
-  placeWeaponCrate(cell: Cell, yaw: number, cost: number): Structure {
-    const id = this.nextId++;
+  /** Put a shop crate on `cell`. The build tool has already checked the spot and taken the cash. */
+  placeShopCrate(type: ShopCrateType, cell: Cell, yaw: number, cost: number, origin: PlacementOrigin = {}): Structure {
+    const id = this.takeId(origin);
     const base = new Vector3(this.grid.centerX(cell.i), 0, this.grid.centerZ(cell.j));
-    const crate = new WeaponCrate(id, { ...cell }, base, yaw, this.scene, this.world);
-    this.add(crate, cost);
+    const crate = new ShopCrate(type, id, { ...cell }, base, yaw, this.scene, this.world);
+    this.add(crate, cost, origin);
     this.grid.occupy([cell], id, true);
     this.events.emit('navCellsChanged', { cells: [{ ...cell }], blocked: true });
     return crate;
@@ -193,7 +200,25 @@ export class StructureManager {
   clearRubble(pile: RubblePile): void {
     this.rubble.remove(pile);
     if (pile.edge && this.grid.edgeWall(pile.edge) === 0) this.grid.setEdgeState(pile.edge, EdgeState.OPEN);
-    this.events.emit('rubbleCleared', { position: pile.base.clone() });
+    this.events.emit('rubbleCleared', { position: pile.base.clone(), structureId: pile.structureId });
+  }
+
+  /** The rubble pile structure `structureId` collapsed into, if it is still there. */
+  rubbleOfStructure(structureId: number): RubblePile | undefined {
+    return this.rubble.ofStructure(structureId);
+  }
+
+  /**
+   * Multiplayer client: set a structure's HP to the host's. A drop plays out like a hit from `from` (damage
+   * state, collapse); a rise like a repair.
+   */
+  syncHp(structure: Structure, hp: number, damageType: DamageType, from: Vector3): void {
+    if (!this.structures.has(structure.id) || hp === structure.hp) return;
+    if (hp < structure.hp) {
+      this.takeHp(structure, structure.hp - hp, damageType, from);
+      return;
+    }
+    if (structure.isAlive) this.repair(structure, hp - structure.hp);
   }
 
   /**
@@ -217,7 +242,14 @@ export class StructureManager {
     return restored;
   }
 
-  private add(structure: Structure, cost: number): void {
+  private takeId(origin: PlacementOrigin): number {
+    if (origin.id === undefined) return this.nextId++;
+    this.nextId = Math.max(this.nextId, origin.id + 1);
+    return origin.id;
+  }
+
+  private add(structure: Structure, cost: number, origin: PlacementOrigin): void {
+    structure.owner = origin.owner ?? localPlayerId();
     this.structures.set(structure.id, structure);
     this.register(structure.colliders, structure);
     this.events.emit('structurePlaced', { id: structure.id, type: structure.type, position: structure.base.clone(), cost });
@@ -239,7 +271,11 @@ export class StructureManager {
 
   /** Every hit on every structure lands here. */
   private handleDamage(structure: Structure, amount: number, damageType: DamageType, from: Vector3): void {
-    const taken = amount * config.destruction.damageMultipliers[damageType];
+    this.takeHp(structure, amount * config.destruction.damageMultipliers[damageType], damageType, from);
+  }
+
+  /** Take `taken` HP (already scaled) off a structure: report it, then move its damage state or collapse it. */
+  private takeHp(structure: Structure, taken: number, damageType: DamageType, from: Vector3): void {
     if (taken <= 0) return;
     structure.hp = Math.max(0, structure.hp - taken);
     this.events.emit('segmentDamaged', {

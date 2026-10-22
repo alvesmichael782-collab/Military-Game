@@ -13,7 +13,8 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * Top-center line. Build phase: "BUILD PHASE  0:42  -  PRESS ENTER TO START".
+ * Top-center line. Build phase: "BUILD PHASE  0:42  -  PRESS ENTER TO START" (multiplayer: "PRESS ENTER WHEN
+ * READY  1/3", then "READY  1/3" once this player has).
  * Fight: "ENEMIES LEFT  12" (alive plus still to come). Hidden in other phases.
  */
 export class PhaseBanner {
@@ -24,6 +25,8 @@ export class PhaseBanner {
   private phase: Phase | null = null;
   private timeText = '';
   private remaining = 0;
+  /** Multiplayer: players ready to start the wave, out of how many, and whether this one is. Null in single player. */
+  private ready: { ready: number; total: number; self: boolean } | null = null;
 
   constructor(events: EventBus<GameEvents>, parent: HTMLElement, keys: PromptKeys) {
     this.root.className = 'hud-phase';
@@ -31,10 +34,17 @@ export class PhaseBanner {
     this.value.className = 'hud-phase__timer';
     this.hint.className = 'hud-phase__hint';
     const setHint = (): void => {
-      this.hint.textContent = `-  Press ${keys.name('startWave')} to start`;
+      const r = this.ready;
+      const key = keys.name('startWave');
+      if (!r) this.hint.textContent = `-  Press ${key} to start`;
+      else this.hint.textContent = r.self ? `-  Ready  ${r.ready}/${r.total}` : `-  Press ${key} when ready  ${r.ready}/${r.total}`;
     };
     setHint();
     keys.onChange(setHint);
+    events.on('readyChanged', (r) => {
+      this.ready = { ...r };
+      setHint();
+    });
     this.root.append(this.title, this.value, this.hint);
     parent.append(this.root);
 

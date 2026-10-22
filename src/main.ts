@@ -37,6 +37,11 @@ import { Debris } from './destruction/Debris';
 import { EnemyDebugView } from './enemies/EnemyDebugView';
 import { EnemyManager } from './enemies/EnemyManager';
 import { WaveDirector } from './enemies/WaveDirector';
+import type { PlayerTarget } from './enemies/EnemyContext';
+import { NetGame } from './net/NetGame';
+import { localPlayerId, setLocalPlayerId } from './net/PlayerId';
+import { MenuBackdrop } from './ui/start/MenuBackdrop';
+import { requestSoloRestart, StartScreen } from './ui/start/StartScreen';
 import type { AimState } from './player/Aim';
 import { Footsteps } from './player/Footsteps';
 import { FPSCamera } from './player/FPSCamera';
@@ -51,13 +56,14 @@ import { ScreenShake } from './player/ScreenShake';
 import { WEAPON_DEFS } from './player/weapons/defs';
 import { loadWeaponAssets } from './player/weapons/WeaponAssets';
 import { WeaponManager } from './player/weapons/WeaponManager';
-import { ArmorCrate } from './economy/ArmorCrate';
 import { CashWallet } from './economy/CashWallet';
 import { connectKillRewards } from './economy/KillRewards';
 import { connectWaveRewards } from './economy/WaveRewards';
+import { ConsumablesShop } from './economy/ConsumablesShop';
 import { WeaponShop } from './economy/WeaponShop';
 import { DebugOverlay, type DebugOverlayState } from './ui/DebugOverlay';
 import { HudRoot } from './ui/hud/HudRoot';
+import { createShopIcons } from './ui/shop/ShopIcons';
 import { PauseMenu } from './ui/menu/PauseMenu';
 import { StructureHpBar } from './ui/StructureHpBar';
 import { BuildGrid } from './world/BuildGrid';
@@ -87,7 +93,12 @@ function createRenderer(): WebGLRenderer {
   return renderer;
 }
 
+/** How long, in ms, the game waits for the mouse to be captured again after a shop menu closes before it pauses. */
+const RECAPTURE_GRACE_MS = 600;
+
 async function boot(): Promise<void> {
+  // The menu comes up at once; the game loads behind it.
+  const startScreen = new StartScreen();
   // The stencils on crates are drawn with the HUD font, so it must be loaded before the textures are painted.
   const [physics, weaponAssets] = await Promise.all([
     Physics.create(),
@@ -139,10 +150,11 @@ async function boot(): Promise<void> {
   const fpsCamera = new FPSCamera(0);
   const debugCamera = new DebugCamera(canvas);
   const overlay = new DebugOverlay();
-  const hud = new HudRoot(events);
+  // Not until the game begins: the start screen is up first.
+  overlay.setClickPrompt(false);
+  const hud = new HudRoot(events, createShopIcons(renderer, WEAPON_DEFS, weaponAssets));
   const menu = new PauseMenu(keybinds, uiSettings, () => input.requestPointerLock(canvas));
   const wallet = new CashWallet(events);
-  const crate = new ArmorCrate(scene, physics.world, grid, wallet, events);
   const structures = new StructureManager(scene, physics.world, grid, registry, events);
   const buildTool = new BuildTool(scene, physics.world, grid, structures, wallet, events, player.colliderHandle);
   const repair = new RepairTool(physics.world, structures, wallet, events);
@@ -157,15 +169,16 @@ async function boot(): Promise<void> {
   const grenades = new Grenades(scene, physics.world, explosions, events);
   const thrower = new GrenadeThrower(physics.world, grenades, events);
   const weapons = new WeaponManager(events, physics.world, registry, weaponAssets);
-  const shop = new WeaponShop(scene, physics.world, structures, weaponAssets, wallet, events);
-  const enemies = new EnemyManager(
-    scene,
-    physics.world,
-    grid,
-    registry,
-    events,
-    structures,
-    explosions,
+  const shop = new WeaponShop(physics.world, structures, wallet, events);
+  const supplies = new ConsumablesShop(physics.world, structures, wallet, events);
+  const shops = [shop, supplies];
+  /** A crate shop's menu is up: the mouse is free for it, but the game keeps running. */
+  const shopOpen = (): boolean => shop.isOpen || supplies.isOpen;
+  const closeShops = (): void => {
+    for (const s of shops) s.close();
+  };
+  /** Everyone the enemies can go after: this machine's player, plus teammates in multiplayer (added by NetGame). */
+  const targets: PlayerTarget[] = [
     {
       get position() {
         return player.position;
@@ -179,9 +192,8 @@ async function boot(): Promise<void> {
       colliderHandle: player.colliderHandle,
       damageable: health,
     },
-    core,
-    map.spawnPoints,
-  );
+  ];
+  const enemies = new EnemyManager(scene, physics.world, grid, registry, events, structures, explosions, targets, core, map.spawnPoints);
   const director = new WaveDirector(events, enemies, map.spawnPoints.length);
   const smoke = new SpawnSmoke(scene, events, map.spawnPoints);
   const mount = new MgMount(events, structures, player);
@@ -201,9 +213,20 @@ async function boot(): Promise<void> {
   let playerActive = false;
   /**
    * The game is paused whenever the mouse is free during play: Esc (or leaving the window) releases it and opens
-   * the pause menu. Before the first click it is paused too, behind the "click to play" prompt.
+   * the pause menu. Before the first click it is paused too, behind the "click to play" prompt. A crate shop's menu
+   * frees the mouse without pausing, and so does the moment after it closes, while the browser captures the mouse
+   * again (otherwise the pause menu flashes up for a frame or two). If the capture never comes, the game pauses then.
    */
-  const isPaused = (): boolean => !debugView && !input.pointerLocked && !state.isOver;
+  let recapturingUntil = 0;
+  /** Multiplayer: set once the game begins. The world never pauses then; the menu just takes the mouse. */
+  let net: NetGame | null = null;
+  /** Multiplayer client: the host is gone and the game is over (its own screen says so). */
+  let connectionLost = false;
+  /** The pause menu is up: the mouse is free during play (see above). */
+  const menuWanted = (): boolean =>
+    !debugView && !input.pointerLocked && !state.isOver && !shopOpen() && !connectionLost && performance.now() >= recapturingUntil;
+  const isPaused = (): boolean => net === null && menuWanted();
+  /** The pause menu (or, before the first click, the click-to-play prompt) is up. In single player that pauses the game. */
   let paused = false;
   let started = false;
   const shake = new ScreenShake(events, fpsCamera.camera);
@@ -244,15 +267,34 @@ async function boot(): Promise<void> {
     events.on('waveCleared', ({ wave }) => console.info(`[waves] wave ${wave} cleared`));
   }
   // The win and lose screens need the mouse back.
-  events.on('gameOver', () => input.exitPointerLock());
+  events.on('gameOver', () => {
+    closeShops();
+    input.exitPointerLock();
+  });
+  // A shop menu needs the mouse; closing it captures the mouse again (from the key or click that closed it).
+  events.on('shopOpened', () => input.exitPointerLock());
+  events.on('shopClosed', () => {
+    if (debugView || state.isOver || health.isDead || !document.hasFocus()) return;
+    recapturingUntil = performance.now() + RECAPTURE_GRACE_MS;
+    input.requestPointerLock(canvas);
+  });
+  events.on('playerDied', closeShops);
+  events.on('connectionLost', () => {
+    connectionLost = true;
+    closeShops();
+    input.exitPointerLock();
+  });
+  // Leaving the window closes the menu, so the game pauses as it would during play.
+  window.addEventListener('blur', closeShops);
 
   canvas.addEventListener('click', () => {
-    if (!debugView && !state.isOver) input.requestPointerLock(canvas);
+    if (!debugView && !state.isOver && !connectionLost) input.requestPointerLock(canvas);
   });
   // Esc toggles the pause menu. In full screen the game owns Esc (see `Input.requestPointerLock`); in a window the
   // browser takes the first Esc to free the mouse and only a click can capture it again, so there Resume is a click.
   window.addEventListener('keydown', (e) => {
-    if (e.code !== 'Escape' || e.repeat || debugView || state.isOver) return;
+    // An open shop menu closes on Esc itself.
+    if (e.code !== 'Escape' || e.repeat || debugView || state.isOver || shopOpen()) return;
     if (input.pointerLocked) input.exitPointerLock();
     else if (menu.isOpen) input.requestPointerLock(canvas);
   });
@@ -296,6 +338,10 @@ async function boot(): Promise<void> {
   /** The test keys. Only while `config.debug.enabled`. */
   const handleDebugKeys = (): void => {
     if (input.wasPressed('F1')) toggleDebugView();
+    if (input.wasPressed('F3')) overlay.toggle();
+    if (input.wasPressed('F6')) retro.toggle();
+    // A multiplayer client does not run the world: no spawning, killing, skipping or breaking things from here.
+    if (net && !net.isHost) return;
     if (input.wasPressed('KeyK')) {
       if (input.isDown('Shift')) {
         // Shift+K: a test hit from a random direction around the player, from shooter eye height.
@@ -318,9 +364,7 @@ async function boot(): Promise<void> {
     }
     if (input.wasPressed('KeyL')) state.lose();
     if (input.wasPressed('KeyM')) wallet.earn(config.debug.testCash, 'debug');
-    if (input.wasPressed('F3')) overlay.toggle();
     if (input.wasPressed('F4')) enemyDebug.toggle();
-    if (input.wasPressed('F6')) retro.toggle();
     if (input.wasPressed('F8')) playtestLog?.download();
     if (input.wasPressed('F9')) stress?.toggle();
     if (input.wasPressed('Digit7')) enemies.spawn('rifleman');
@@ -337,18 +381,25 @@ async function boot(): Promise<void> {
 
   const render = (frameDt: number, alpha: number): void => {
     if (input.pointerLocked) started = true;
-    if (isPaused() !== paused) {
+    if (menuWanted() !== paused) {
       paused = !paused;
-      sounds.setPaused(paused);
+      // In multiplayer the game goes on behind the menu, sound included.
+      if (!net) sounds.setPaused(paused);
       events.emit('pauseChanged', { paused });
     }
     menu.setOpen(paused && started);
-    // Keys typed in the menu never reach the game.
-    if (config.debug.enabled && !paused) handleDebugKeys();
-    if (!paused && input.wasActionPressed('startWave')) {
-      if (state.phase === Phase.BUILD) state.startWaveEarly();
+    // Keys typed in the menus never reach the game.
+    const inMenu = paused || shopOpen();
+    if (config.debug.enabled && !inMenu) handleDebugKeys();
+    if (!inMenu && input.wasActionPressed('startWave')) {
+      if (state.isOver) {
+        // Single player restarts straight into a new game; multiplayer goes back to the main menu.
+        if (!net) requestSoloRestart();
+        net?.leave();
+        window.location.reload();
+      } else if (net) net.vote();
+      else if (state.phase === Phase.BUILD) state.startWaveEarly();
       else if (state.phase === Phase.AFTERMATH) state.skipAftermath();
-      else if (state.isOver) window.location.reload();
     }
 
     // Once the game is won or lost the player has no control (the end screen is up and the mouse is released).
@@ -370,10 +421,9 @@ async function boot(): Promise<void> {
     const armed = !buildTool.isActive && !repair.isRepairing && !mounted;
     weapons.handleInput(input, playing && !armor.isPlating && armed, player.sprintHeld);
     thrower.handleInput(input, playing && armed);
-    crate.handleInput(input, playing);
-    // The arrow keys pick build items while the build tool is out, so the weapon crate needs it put away.
+    // The crates open with E, which the build tool leaves alone; still, no shopping with the tool out or on the MG.
     const canShop = playing && !buildTool.isActive && !mounted;
-    shop.handleInput(input, canShop);
+    for (const s of shops) s.handleInput(input, canShop);
     mount.handleInput(input, playing && !buildTool.isActive);
     mg.setTrigger(playing && mounted && !armor.isPlating && input.isActionDown('fire'));
     const lookX = playing ? input.mouseDeltaX : 0;
@@ -405,9 +455,8 @@ async function boot(): Promise<void> {
     jolt.update(frameDt, mount.mounted ? j.mountedScale : MathUtils.lerp(1, j.adsScale, ads.amount));
     fpsCamera.setShake(shake.pitch + jolt.pitch, shake.yaw + jolt.yaw, shake.roll + jolt.roll);
     buildTool.update(aim);
-    // E is shared by the armor crate, the weapon crate, repairs and the MG: the closest one the player is looking at gets it.
+    // E is shared by the two crates, repairs and the MG: the closest one the player is looking at gets it.
     const canRepair = playing && !armor.isPlating && !mount.mounted;
-    const crateDistance = playing && !mount.mounted ? crate.interactDistance(aim) : Infinity;
     let repairDistance = canRepair ? repair.interactDistance(aim) : Infinity;
     const mountDistance = playing && !buildTool.isActive ? mount.interactDistance(aim) : Infinity;
     // Looking at a damaged nest's gun from behind it: E mounts (repair it by aiming at its sandbags instead).
@@ -415,9 +464,10 @@ async function boot(): Promise<void> {
       repairDistance = Infinity;
     }
     const shopDistance = canShop ? shop.interactDistance(aim) : Infinity;
-    const nearest = Math.min(crateDistance, repairDistance, mountDistance, shopDistance);
-    crate.update(aim, playing && !mount.mounted && crateDistance <= nearest);
-    shop.update(frameDt, canShop && shopDistance <= nearest);
+    const suppliesDistance = canShop ? supplies.interactDistance(aim) : Infinity;
+    const nearest = Math.min(repairDistance, mountDistance, shopDistance, suppliesDistance);
+    shop.update(canShop && shopDistance <= nearest);
+    supplies.update(canShop && suppliesDistance <= nearest);
     repair.update(frameDt, aim, canRepair && repairDistance <= nearest);
     mount.update(aim, playing && mountDistance <= nearest);
     core.update(fpsCamera.camera);
@@ -427,6 +477,8 @@ async function boot(): Promise<void> {
     grenades.render(alpha);
     debris.render(alpha);
     stress?.update(frameDt);
+    // Teammates, the host's soldiers (on a client) and this frame's messages, before the soldiers are drawn.
+    net?.update(frameDt);
     profiler.begin('ai');
     director.update(frameDt);
     enemies.update(frameDt, alpha);
@@ -454,7 +506,8 @@ async function boot(): Promise<void> {
     renderer.info.reset();
     retro.begin();
     renderer.render(scene, debugView ? debugCamera.camera : fpsCamera.camera);
-    if (!debugView) {
+    // Down in multiplayer, the player has no weapon in hand.
+    if (!debugView && !health.isDead) {
       renderer.clearDepth();
       renderer.render(weapons.viewModel.scene, weapons.viewModel.camera);
     }
@@ -520,12 +573,55 @@ async function boot(): Promise<void> {
   // Dev-only handle for automated playtests and console poking. Stripped from production builds.
   if (import.meta.env.DEV) {
     Object.assign(window, {
-      __game: { jolt, lowHealth, menu, keybinds, uiSettings, applyDamage, shop, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, crate, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
+      __game: { get net() { return net; }, jolt, lowHealth, menu, keybinds, uiSettings, applyDamage, shop, supplies, playtestLog, profiler, stress, retro, director, smoke, mount, mg, stats, repair, debris, sounds, footsteps, state, player, health, armor, wallet, hud, events, grid, core, structures, buildTool, fpsCamera, input, scene, physics, RAPIER, weapons, thrower, grenades, enemies, explosions, effects, renderer },
     });
   }
 
   // Everything is built: keep each shadow depth material on one shader (see ShadowDepth.ts).
   separateInstancedShadowDepth(scene);
+
+  // The menu: the map turns slowly behind it until the player picks single player, or a multiplayer game starts.
+  const backdrop = new MenuBackdrop(renderer, retro, scene, core.base);
+  backdrop.start();
+  startScreen.setLoaded();
+  const choice = await startScreen.choose();
+  backdrop.stop();
+  startScreen.hide();
+
+  if (choice.mode === 'multiplayer') {
+    const session = choice.session;
+    setLocalPlayerId(session.localId);
+    director.setPlayerCount(session.players.length);
+    if (!session.isHost) director.disable();
+    net = new NetGame({
+      session,
+      events,
+      scene,
+      world: physics.world,
+      registry,
+      state,
+      grid,
+      structures,
+      core,
+      enemies,
+      grenades,
+      mount,
+      health,
+      wallet,
+      player,
+      camera: fpsCamera,
+      targets,
+    });
+    buildTool.setCommands(net.structureSync.commands);
+    repair.setTargets(net.structureSync.repairTargets);
+    player.teleport(net.spawnPoint());
+  }
+  events.emit('sessionStarted', {
+    multiplayer: net !== null,
+    players: choice.mode === 'multiplayer' ? choice.session.players.map((p) => ({ id: p.id, name: p.name })) : [{ id: localPlayerId(), name: 'Soldier' }],
+    localId: localPlayerId(),
+  });
+  // A multiplayer client's phases come from the host; `start` leaves them to it.
   state.start();
   new GameLoop(fixedUpdate, render, isPaused).start();
   if (stress && new URLSearchParams(window.location.search).has('stress')) stress.toggle();

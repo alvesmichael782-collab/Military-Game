@@ -33,6 +33,11 @@ export const Groups = {
   player: interactionGroups(Layer.PLAYER, ALL & ~Layer.GRENADE),
   grenade: interactionGroups(Layer.GRENADE, ALL & ~Layer.PLAYER),
   /**
+   * A teammate's body in multiplayer: on the player layer, so enemies see, shoot and bump into it and players
+   * cannot walk through each other, while the players' own bullets pass through it (no friendly fire).
+   */
+  ally: interactionGroups(Layer.PLAYER, ALL & ~Layer.GRENADE),
+  /**
    * Enemy movement capsule: stands on the world, steps on the wall lip proxies, bumps the player and the
    * map edge. Enemies pass through each other (they steer apart instead), and ignore grenades and debris.
    */

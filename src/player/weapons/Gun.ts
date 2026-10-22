@@ -96,14 +96,6 @@ export class Gun extends Weapon {
     this.recoil.kick(this.recoilScale(aim) * this.aimScale(def.ads.recoilMultiplier));
     const m = this.muzzleOffset;
     this.muzzle.copy(aim.eye).addScaledVector(this.right, m.x).addScaledVector(this.up, m.y).addScaledVector(this.forward, -m.z);
-    // Before the bullet's impact, so the tracer knows where it starts.
-    this.events.emit('weaponFired', {
-      weapon: def.id,
-      sounds: def.sounds,
-      muzzle: this.muzzle,
-      kickUp: this.recoil.lastKickUp,
-      kickSide: this.recoil.lastKickSide,
-    });
     this.traceBullet(aim.eye, def.range);
 
     this.bloom = Math.min(def.spread.maxBloom, this.bloom + def.spread.bloomPerShot);
@@ -139,9 +131,18 @@ export class Gun extends Weapon {
     this.ray.origin = { x: eye.x, y: eye.y, z: eye.z };
     this.ray.dir = { x: this.direction.x, y: this.direction.y, z: this.direction.z };
     const hit = this.world.castRayAndGetNormal(this.ray, range, true, undefined, Groups.bullet);
+    if (hit) this.point.copy(eye).addScaledVector(this.direction, hit.timeOfImpact);
+    // Before the bullet's impact, so the tracer knows where it starts.
+    this.events.emit('weaponFired', {
+      weapon: this.def.id,
+      sounds: this.def.sounds,
+      muzzle: this.muzzle,
+      end: hit ? this.point : null,
+      kickUp: this.recoil.lastKickUp,
+      kickSide: this.recoil.lastKickSide,
+    });
     if (!hit) return;
 
-    this.point.copy(eye).addScaledVector(this.direction, hit.timeOfImpact);
     this.normal.set(hit.normal.x, hit.normal.y, hit.normal.z);
 
     const hitbox = this.registry.hitboxOf(hit.collider);

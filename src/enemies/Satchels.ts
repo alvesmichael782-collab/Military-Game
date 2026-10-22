@@ -33,6 +33,8 @@ class Satchel {
   fuse = 0;
   beepTimer = 0;
   blink = 0;
+  /** A multiplayer client's copy of the host's satchel: it goes off with no damage (the host's own does the damage). */
+  harmless = false;
   /** Bumped each time this pooled satchel is armed, so old handles go stale. */
   generation = 0;
   private readonly led: Mesh;
@@ -91,21 +93,25 @@ export class Satchels {
     return n;
   }
 
-  /** Arm a satchel on the ground at `position`, facing `yaw`. Returns null if every pooled satchel is out. */
-  arm(position: Vector3, yaw: number, fuse: number, dropped: boolean): SatchelHandle | null {
+  /**
+   * Arm a satchel on the ground at `position`, facing `yaw`. Returns null if every pooled satchel is out.
+   * A `harmless` one (a multiplayer client's copy of the host's) blows up with no damage.
+   */
+  arm(position: Vector3, yaw: number, fuse: number, dropped: boolean, harmless = false): SatchelHandle | null {
     const index = this.pool.findIndex((s) => !s.active);
     if (index < 0) return null;
     const s = this.pool[index];
     s.active = true;
     s.generation++;
     s.fuse = fuse;
+    s.harmless = harmless;
     s.beepTimer = 0;
     s.blink = 0;
     s.position.set(position.x, 0, position.z);
     s.root.position.copy(s.position);
     s.root.rotation.set(0, yaw, dropped ? 0.25 : 0);
     s.root.visible = true;
-    this.events.emit('satchelArmed', { position: s.position, fuse, dropped });
+    this.events.emit('satchelArmed', { position: s.position, yaw, fuse, dropped });
     return { index, generation: s.generation };
   }
 
@@ -140,6 +146,10 @@ export class Satchels {
     s.setLit(false);
     blastCenter.copy(s.position).setY(BLAST_HEIGHT);
     // Can chain: the blast may kill a sapper whose dropped satchel arms in this same pool.
-    this.explosions.explode(blastCenter, cfg.radius, cfg.damage, 'enemy', { kind: 'satchel', fullDamageRadius: cfg.fullDamageRadius });
+    this.explosions.explode(blastCenter, cfg.radius, cfg.damage, 'enemy', {
+      kind: 'satchel',
+      fullDamageRadius: cfg.fullDamageRadius,
+      harmless: s.harmless,
+    });
   }
 }

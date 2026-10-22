@@ -59,6 +59,8 @@ export class Grenade {
   fuse = 0;
   /** Who threw it; its blast carries this source. */
   source: DamageSource = 'player';
+  /** Another player's grenade, shown here: it deals no damage (see `Grenades.throw`). */
+  harmless = false;
 
   private readonly body: RAPIER.RigidBody;
   private _active = false;

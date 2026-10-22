@@ -9,6 +9,7 @@ export const knife: MeleeDef = {
   id: 'knife',
   displayName: 'KNIFE',
   slot: 'melee',
+  category: 'melee',
   price: 150,
   moveSpeedMultiplier: 1.1,
   range: 2,
@@ -21,7 +22,6 @@ export const knife: MeleeDef = {
     // Low on the right, blade forward and up toward the crosshair.
     position: { x: 0.14, y: -0.13, z: -0.37 },
     rotation: { x: 0.3, y: 0.3, z: -0.45 },
-    displayScale: 2.2,
     holsterTime: 0.14,
     drawTime: 0.28,
     sprintDrop: 0.02,

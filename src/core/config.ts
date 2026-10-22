@@ -64,7 +64,7 @@ export const config = {
     rotate: ['KeyR', ''],
     /** Remove a structure, clear rubble. */
     remove: ['KeyF', ''],
-    /** Cycle the build tool's items and the weapon crate's weapons: previous, next. */
+    /** Cycle the build tool's items: previous, next. */
     cyclePrev: ['ArrowLeft', ''],
     cycleNext: ['ArrowRight', ''],
   },
@@ -279,8 +279,9 @@ export const config = {
     },
   },
   grenade: {
-    /** Grenades carried at the start. */
+    /** Grenades carried at the start, and the most the player can carry (more are bought at the consumables crate). */
     count: 4,
+    maxCount: 4,
     /** Seconds from the throw to the explosion. */
     fuse: 3,
     /** Seconds between throws. */
@@ -347,9 +348,12 @@ export const config = {
     prices: {
       wall: 125,
       mgNest: 750,
+      /** Consumables crate items. */
       armorPlate: 300,
-      /** The weapon crate structure. Weapon prices live in each weapon's def. */
+      grenade: 200,
+      /** The crate structures. Weapon prices live in each weapon's def. */
       weaponCrate: 100,
+      consumablesCrate: 100,
     },
     /** Fraction of the price refunded when the player removes a structure they built. */
     refundFraction: 0.5,
@@ -376,6 +380,8 @@ export const config = {
     maxMgNests: 1,
     /** Most weapon crates allowed at once. */
     maxWeaponCrates: 1,
+    /** Most consumables crates allowed at once. */
+    maxConsumablesCrates: 1,
     /** Most wall segments alive at once (instanced mesh capacity). */
     maxWalls: 400,
   },
@@ -476,27 +482,23 @@ export const config = {
       mgNest: 0.6,
       /** Never damaged, so never repaired. */
       weaponCrate: 0,
+      consumablesCrate: 0,
     },
     /** Repairs are paid up front in steps of this many dollars, so cash ticks down instead of flickering every frame. */
     chargeStep: 5,
     /** A damaged structure's HP bar shows while aiming at it within this distance, in meters. */
     hpBarRange: 12,
   },
-  armorCrate: {
-    /** Position relative to the outpost core (x, z), in meters. Sits in one grid cell, which is blocked for building. */
-    offset: { x: 3, z: 3 },
-    /** How close the player must be, looking at it, to use it, in meters. */
-    useRange: 2.5,
-  },
   /**
-   * The weapon crate: a temporary buildable shop (1 x 1 cell, not damageable). Look at it within `useRange`, the left and
-   * right arrows (`keybinds.cyclePrev` / `cycleNext`) pick a weapon, press E to buy it (or refill one already owned), in any phase.
+   * The weapon crate: a temporary buildable shop (1 x 1 cell, not damageable). Look at it within `useRange` and press E
+   * to open its menu, in any phase: weapons by section, bought (or refilled when already carried) with a click.
    */
   weaponCrate: {
     useRange: 2.5,
-    /** The floating copy of the selected weapon: height of its center above the ground, in meters, and turn speed in radians per second. */
-    displayHeight: 1.1,
-    displaySpin: 0.9,
+  },
+  /** The consumables crate: the same kind of shop for armor plates and frag grenades. */
+  consumablesCrate: {
+    useRange: 2.5,
   },
   hud: {
     /** How quickly the crosshair follows the weapon's spread (higher = faster). */
@@ -751,6 +753,31 @@ export const config = {
     landingVolume: 1.4,
     landingMaxVolume: 1.8,
     landingPitch: 0.86,
+  },
+  multiplayer: {
+    /** Players in one lobby, the host included. */
+    maxPlayers: 4,
+    /** Each player's position and view go out this many times a second. */
+    playerSendRate: 20,
+    /** The host sends every soldier's position and pose this many times a second. */
+    enemySendRate: 15,
+    /** Others are drawn this far in the past, in seconds, so there are always two updates to blend between. */
+    interpolationDelay: 0.12,
+    /** Each player past the first adds this share of a wave's budget (1 player: x1, 2: x1.5, 4: x2.5). */
+    extraPlayerBudget: 0.5,
+    /** Teammates spawn this far apart, in meters, side by side across the spawn point. */
+    spawnSpacing: 1.5,
+    /** Teammates' uniform color, a blue-gray that reads apart from the enemy's tan and olive. */
+    allyUniform: 0x56606e,
+    /** Lobby codes: this many characters from `codeAlphabet` (no 0/O, 1/I/L). */
+    codeLength: 5,
+    codeAlphabet: 'ABCDEFGHJKMNPQRSTUVWXYZ23456789',
+    /** Prefix for the host's id on the PeerJS broker, so lobby codes do not collide with other apps. */
+    peerPrefix: 'last-stand-fortress-',
+    /** Give up on reaching the broker or a lobby after this many seconds. */
+    connectTimeout: 12,
+    /** Longest callsign, in characters. */
+    maxNameLength: 16,
   },
   debug: {
     /**

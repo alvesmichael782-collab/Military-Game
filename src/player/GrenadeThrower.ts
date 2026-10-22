@@ -15,7 +15,7 @@ const HAND_DOWN = 0.1;
 const WALL_MARGIN = 0.12;
 const MAX_PITCH = MathUtils.degToRad(85);
 
-/** Halo-style grenade throw on a dedicated key: no weapon switch, a short cooldown, a limited supply. */
+/** Halo-style grenade throw on a dedicated key: no weapon switch, a short cooldown, a limited supply (topped up at the consumables crate). */
 export class GrenadeThrower {
   private _count: number = config.grenade.count;
   private cooldown = 0;
@@ -32,7 +32,12 @@ export class GrenadeThrower {
     private readonly world: RAPIER.World,
     private readonly grenades: Grenades,
     private readonly events: EventBus<GameEvents>,
-  ) {}
+  ) {
+    events.on('grenadePurchased', () => {
+      this._count = Math.min(config.grenade.maxCount, this._count + 1);
+      this.announce();
+    });
+  }
 
   get count(): number {
     return this._count;
@@ -78,7 +83,7 @@ export class GrenadeThrower {
 
   /** Emit the current count, e.g. so a freshly built HUD can draw it. */
   announce(): void {
-    this.events.emit('grenadesChanged', { count: this._count, max: config.grenade.count });
+    this.events.emit('grenadesChanged', { count: this._count, max: config.grenade.maxCount });
   }
 
   /** If a wall sits between the eye and the hand, release the grenade just in front of the wall instead. */

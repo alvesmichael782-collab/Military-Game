@@ -1,6 +1,6 @@
 import { config } from '../core/config';
 
-export type StructureType = 'wall' | 'mgNest' | 'weaponCrate';
+export type StructureType = 'wall' | 'mgNest' | 'weaponCrate' | 'consumablesCrate';
 
 /** Something the build tool can place. */
 export interface Buildable {
@@ -20,6 +20,13 @@ export const BUILDABLES: readonly Buildable[] = [
   { type: 'mgNest', name: 'MG NEST', cost: config.economy.prices.mgNest, limit: config.build.maxMgNests },
   /** Covers one cell. A temporary shop for weapons (see economy/WeaponShop.ts). */
   { type: 'weaponCrate', name: 'WEAPON CRATE', cost: config.economy.prices.weaponCrate, limit: config.build.maxWeaponCrates },
+  /** Covers one cell. A temporary shop for armor plates and grenades (see economy/ConsumablesShop.ts). */
+  {
+    type: 'consumablesCrate',
+    name: 'CONSUMABLES CRATE',
+    cost: config.economy.prices.consumablesCrate,
+    limit: config.build.maxConsumablesCrates,
+  },
 ];
 
 export function buildableOf(type: StructureType): Buildable {

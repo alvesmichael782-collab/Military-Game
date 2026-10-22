@@ -41,6 +41,10 @@ export class WaveDirector {
   private fighting = false;
   private cleared = false;
   private _budget = 0;
+  /** Players in the game: more players, bigger waves. */
+  private playerCount = 1;
+  /** Off on a multiplayer client: the host's director runs the waves. */
+  private enabled = true;
   /** Enemies of this wave not sent yet, in the order they go out. */
   private readonly queue: EnemyType[] = [];
   /** The current squad's members still waiting for room under the alive cap, and where they come from. */
@@ -57,12 +61,24 @@ export class WaveDirector {
     private readonly spawnPointCount: number,
   ) {
     events.on('phaseChanged', ({ from, to, wave }) => {
+      if (!this.enabled) return;
       if (from === Phase.FIGHT && to !== Phase.FIGHT) this.endFight(to);
       // The aftermath is over: tidy away the bodies before building. Rubble stays.
       if (from === Phase.AFTERMATH) this.enemies.clearCorpses();
       if (to === Phase.BUILD) this.plan(wave);
       if (to === Phase.FIGHT) this.startFight(wave);
     });
+  }
+
+  /** Multiplayer client: never send enemies or report the waves; the host's director does. */
+  disable(): void {
+    this.enabled = false;
+    this.fighting = false;
+  }
+
+  /** Multiplayer: how many players are in the game. Takes effect from the next wave planned. */
+  setPlayerCount(count: number): void {
+    this.playerCount = Math.max(1, count);
   }
 
   /** The current (or next) wave's budget in points. */
@@ -131,7 +147,8 @@ export class WaveDirector {
     const count = Math.min(this.spawnPointCount, table[Math.min(wave, table.length) - 1] ?? 1);
     const all = shuffle(Array.from({ length: this.spawnPointCount }, (_, i) => i));
     this.points = all.slice(0, Math.max(1, count)).sort((a, b) => a - b);
-    this._budget = wave * config.waves.budgetPerWave;
+    const extra = (this.playerCount - 1) * config.multiplayer.extraPlayerBudget;
+    this._budget = Math.round(wave * config.waves.budgetPerWave * (1 + extra));
     this.events.emit('wavePlanned', { wave, spawnPoints: [...this.points] });
   }
 

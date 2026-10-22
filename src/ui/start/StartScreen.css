@@ -1,0 +1,430 @@
+/*
+ * Start screen and lobby. Built on the pause menu's kit (.menu: bevels, khaki text, one red accent, --mu sizing),
+ * laid out like the main menus of 2001-2004 shooters: the title and a text list on the left over the live map,
+ * a bevelled panel on the right for multiplayer.
+ */
+
+/* The HUD waits until the game begins. */
+.in-start .hud {
+  display: none;
+}
+
+.menu.start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  place-items: center start;
+  column-gap: calc(48 * var(--mu));
+  padding: calc(48 * var(--mu)) max(calc(96 * var(--mu)), 6vw);
+  /* Darker on the left, where the text is, so the map still shows on the right. */
+  background: linear-gradient(90deg, rgba(8, 7, 5, 0.84) 0%, rgba(8, 7, 5, 0.55) 42%, rgba(8, 7, 5, 0.2) 100%);
+  overflow: auto;
+}
+
+.start__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(44 * var(--mu));
+  min-width: 0;
+}
+
+.start__title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+  line-height: 0.9;
+  font-weight: normal;
+  text-shadow: 0 calc(3 * var(--mu)) calc(6 * var(--mu)) rgba(0, 0, 0, 0.7);
+}
+
+.start__title-top {
+  font-family: var(--font-wave);
+  font-size: calc(124 * var(--mu));
+  color: var(--hud-red);
+  transform: rotate(-3deg);
+  transform-origin: left bottom;
+}
+
+.start__title-bottom {
+  margin-top: calc(6 * var(--mu));
+  padding-left: calc(10 * var(--mu));
+  font-family: var(--font-hud);
+  font-size: calc(54 * var(--mu));
+  font-weight: 700;
+  letter-spacing: calc(21 * var(--mu));
+  text-transform: uppercase;
+  color: var(--menu-text-bright);
+}
+
+.start__items {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(6 * var(--mu));
+}
+
+.start__item {
+  position: relative;
+  margin: 0;
+  padding: calc(8 * var(--mu)) calc(40 * var(--mu)) calc(8 * var(--mu)) calc(14 * var(--mu));
+  background: none;
+  border: 0;
+  color: var(--menu-text);
+  font-family: var(--font-hud);
+  font-size: calc(36 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(3 * var(--mu));
+  line-height: 1;
+  text-transform: uppercase;
+  text-align: left;
+  text-shadow: 0 calc(2 * var(--mu)) calc(3 * var(--mu)) rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.start__item-smear {
+  position: absolute;
+  inset: calc(-4 * var(--mu)) calc(-36 * var(--mu)) calc(-4 * var(--mu)) calc(-18 * var(--mu));
+  width: calc(100% + 54 * var(--mu));
+  height: calc(100% + 8 * var(--mu));
+  opacity: 0;
+  transform: scaleX(0.6);
+  transform-origin: left center;
+  transition: opacity 0.18s ease-out, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.start__item-label {
+  position: relative;
+  display: inline-block;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The item under the mouse (or keyboard focus), and the one picked, sit on the red brush stroke. */
+.start__item:hover,
+.start__item:focus-visible,
+.start__item.is-current {
+  color: #fff7ea;
+}
+
+.start__item:hover .start__item-smear,
+.start__item:focus-visible .start__item-smear,
+.start__item.is-current .start__item-smear {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.start__item:hover .start__item-label,
+.start__item:focus-visible .start__item-label,
+.start__item.is-current .start__item-label {
+  transform: translateX(calc(10 * var(--mu)));
+}
+
+.start__item:active .start__item-label {
+  transform: translate(calc(10 * var(--mu)), calc(1 * var(--mu)));
+}
+
+.start__item:focus-visible {
+  outline: none;
+}
+
+.start__status {
+  min-height: calc(20 * var(--mu));
+  padding-left: calc(14 * var(--mu));
+  font-family: var(--font-hud);
+  font-size: calc(17 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(3 * var(--mu));
+  text-transform: uppercase;
+  color: var(--menu-dim);
+  animation: start-pulse 1.4s ease-in-out infinite;
+}
+
+.start__status:empty {
+  animation: none;
+}
+
+@keyframes start-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* ---- Multiplayer panel ---- */
+
+.start__panel {
+  justify-self: end;
+  width: calc(470 * var(--mu));
+  max-height: calc(100vh - 96 * var(--mu));
+  overflow: auto;
+  padding: calc(22 * var(--mu)) calc(24 * var(--mu)) calc(20 * var(--mu));
+  box-shadow: 0 calc(12 * var(--mu)) calc(40 * var(--mu)) rgba(0, 0, 0, 0.5);
+  animation: start-panel-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.start__panel[hidden],
+.start__page[hidden] {
+  display: none;
+}
+
+@keyframes start-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(24 * var(--mu)));
+  }
+}
+
+.start__page {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--mu));
+}
+
+.start__panel-title {
+  margin: 0 0 calc(10 * var(--mu));
+  padding-bottom: calc(10 * var(--mu));
+  font-family: var(--font-hud);
+  font-size: calc(30 * var(--mu));
+  font-weight: 700;
+  letter-spacing: calc(4 * var(--mu));
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--menu-text-bright);
+  box-shadow: inset 0 calc(-3 * var(--mu)) 0 var(--menu-accent);
+}
+
+.start__page .menu__heading {
+  display: block;
+  margin-top: calc(16 * var(--mu));
+}
+
+.start__panel-title + .menu__heading {
+  margin-top: 0;
+}
+
+.start__note {
+  margin: 0;
+  color: var(--menu-dim);
+  font-size: calc(13 * var(--mu));
+  line-height: 1.45;
+}
+
+.start__input {
+  width: 100%;
+  height: calc(38 * var(--mu));
+  padding: 0 calc(10 * var(--mu));
+  background: var(--menu-well);
+  color: var(--menu-text-bright);
+  font-family: var(--font-menu);
+  font-size: calc(16 * var(--mu));
+  border-radius: 0;
+  user-select: text;
+}
+
+.start__input::placeholder {
+  color: var(--menu-dim);
+  opacity: 1;
+}
+
+.start__input:focus {
+  outline: calc(1 * var(--mu)) solid var(--menu-accent);
+  outline-offset: 0;
+}
+
+.start__input--code {
+  font-family: var(--font-hud);
+  font-size: calc(21 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(5 * var(--mu));
+  text-transform: uppercase;
+}
+
+.start__input--code::placeholder {
+  font-size: calc(16 * var(--mu));
+  letter-spacing: calc(2 * var(--mu));
+}
+
+.start__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(8 * var(--mu));
+}
+
+.start__row .menu__button {
+  min-width: calc(110 * var(--mu));
+}
+
+.start__wide {
+  width: 100%;
+  margin-top: calc(4 * var(--mu));
+}
+
+.start .menu__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.start .menu__button:disabled:active {
+  border-color: var(--menu-light) var(--menu-dark) var(--menu-dark) var(--menu-light);
+  padding-top: calc(8 * var(--mu));
+  padding-bottom: calc(8 * var(--mu));
+}
+
+.start .menu__button--primary:disabled:active {
+  border-color: #e0484e #4a0508 #4a0508 #e0484e;
+}
+
+.start .menu__button--primary:disabled:hover {
+  background-color: var(--menu-accent);
+}
+
+.start__hint {
+  min-height: calc(18 * var(--mu));
+  margin-top: calc(4 * var(--mu));
+}
+
+.start .menu__hint.is-error {
+  color: #ff5a4e;
+}
+
+.start__code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12 * var(--mu));
+  padding: calc(10 * var(--mu)) calc(12 * var(--mu)) calc(10 * var(--mu)) calc(16 * var(--mu));
+  background: var(--menu-well);
+  border: calc(1 * var(--mu)) solid;
+  border-color: var(--menu-dark) var(--menu-light) var(--menu-light) var(--menu-dark);
+}
+
+.start__code {
+  font-family: var(--font-hud);
+  font-size: calc(54 * var(--mu));
+  font-weight: 700;
+  letter-spacing: calc(12 * var(--mu));
+  line-height: 1;
+  color: var(--menu-text-bright);
+  user-select: all;
+}
+
+.start__copy {
+  min-width: calc(96 * var(--mu));
+}
+
+.start__copy[hidden] {
+  display: none;
+}
+
+.start__squad {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: calc(1 * var(--mu)) solid;
+  border-color: var(--menu-dark) var(--menu-light) var(--menu-light) var(--menu-dark);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.start__member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto calc(72 * var(--mu));
+  align-items: center;
+  column-gap: calc(10 * var(--mu));
+  min-height: calc(38 * var(--mu));
+  padding: 0 calc(12 * var(--mu));
+}
+
+.start__member + .start__member {
+  border-top: calc(1 * var(--mu)) solid rgba(111, 103, 83, 0.35);
+}
+
+.start__member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--menu-text-bright);
+  font-size: calc(15 * var(--mu));
+}
+
+.start__member.is-open .start__member-name {
+  color: var(--menu-dim);
+  opacity: 0.6;
+}
+
+.start__member-tags {
+  display: flex;
+  gap: calc(4 * var(--mu));
+}
+
+.start__tag {
+  padding: calc(3 * var(--mu)) calc(7 * var(--mu)) calc(2 * var(--mu));
+  background: var(--menu-face);
+  color: var(--menu-text);
+  font-family: var(--font-hud);
+  font-size: calc(12 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(1.5 * var(--mu));
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.start__tag--you {
+  background: var(--menu-accent);
+  color: #fff7ea;
+}
+
+.start__member-state {
+  justify-self: end;
+  font-family: var(--font-hud);
+  font-size: calc(14 * var(--mu));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--mu));
+  text-transform: uppercase;
+  color: var(--menu-dim);
+}
+
+.start__member-state.is-ready {
+  color: var(--menu-text-bright);
+}
+
+.start__footer {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--mu));
+  margin-top: calc(14 * var(--mu));
+}
+
+.start__footer .menu__hint {
+  flex: 1;
+  margin: 0;
+}
+
+.start__footer .menu__button[hidden] {
+  display: none;
+}
+
+/* Narrow windows: the panel goes under the title instead of beside it. */
+@media (max-width: 900px) {
+  .menu.start {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    row-gap: calc(28 * var(--mu));
+    padding: calc(32 * var(--mu)) 16px;
+  }
+
+  .start__panel {
+    width: 100%;
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start *,
+  .start {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

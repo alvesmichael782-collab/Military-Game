@@ -25,6 +25,8 @@ export interface RubblePile {
   readonly yaw: number;
   readonly variant: number;
   readonly collider: RAPIER.Collider;
+  /** Id of the structure that collapsed into it. */
+  readonly structureId: number;
 }
 
 /**
@@ -77,14 +79,20 @@ export class RubbleField {
     return undefined;
   }
 
-  /** A wall's pile along `edge`, centered on `base`. `seed` picks its look. */
-  addWall(edge: Readonly<Edge>, base: Vector3, yaw: number, seed: number): RubblePile {
-    return this.add('wall', { ...edge }, [], base, yaw, seed % DAMAGE_VARIANTS, this.wallHull, 'concrete');
+  /** The pile left by structure `structureId`, if it is still there. */
+  ofStructure(structureId: number): RubblePile | undefined {
+    for (const pile of this.piles.values()) if (pile.structureId === structureId) return pile;
+    return undefined;
+  }
+
+  /** A wall's pile along `edge`, centered on `base`. `structureId` (the wall's) picks its look. */
+  addWall(edge: Readonly<Edge>, base: Vector3, yaw: number, structureId: number): RubblePile {
+    return this.add('wall', { ...edge }, [], base, yaw, structureId, structureId % DAMAGE_VARIANTS, this.wallHull, 'concrete');
   }
 
   /** The MG nest's sandbag pile over its cells. */
-  addNest(cells: readonly Cell[], base: Vector3, yaw: number, seed: number): RubblePile {
-    return this.add('nest', null, cells.map((c) => ({ ...c })), base, yaw, seed % NEST_VARIANTS, this.nestHull, 'sand');
+  addNest(cells: readonly Cell[], base: Vector3, yaw: number, structureId: number): RubblePile {
+    return this.add('nest', null, cells.map((c) => ({ ...c })), base, yaw, structureId, structureId % NEST_VARIANTS, this.nestHull, 'sand');
   }
 
   remove(pile: RubblePile): void {
@@ -104,6 +112,7 @@ export class RubbleField {
     cells: Cell[],
     base: Vector3,
     yaw: number,
+    structureId: number,
     variant: number,
     hull: Float32Array,
     surface: 'concrete' | 'sand',
@@ -117,7 +126,7 @@ export class RubbleField {
     const desc = RAPIER.ColliderDesc.convexHull(hull);
     if (!desc) throw new Error('Rubble collider hull failed');
     const collider = tagSurface(this.world.createCollider(desc, body), surface);
-    const pile: RubblePile = { id: this.nextId++, kind, edge, cells, base: base.clone(), yaw, variant, collider };
+    const pile: RubblePile = { id: this.nextId++, kind, edge, cells, base: base.clone(), yaw, variant, collider, structureId };
     this.piles.set(pile.id, pile);
     this.byCollider.set(collider.handle, pile);
     this.redraw();

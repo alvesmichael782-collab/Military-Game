@@ -6,7 +6,7 @@ import { Groups } from '../core/CollisionGroups';
 import { config } from '../core/config';
 import type { ImpactSurface } from '../core/EventBus';
 import { Enemy } from './Enemy';
-import type { EnemyContext } from './EnemyContext';
+import type { EnemyContext, PlayerTarget } from './EnemyContext';
 
 /** A place to fight from. */
 interface CoverSpot {
@@ -75,6 +75,8 @@ export class Rifleman extends Enemy {
   readonly type = 'rifleman';
   readonly maxHp: number = config.rifleman.hp;
 
+  /** The player this rifleman watches and shoots at: the one it saw last, or else the nearest one alive. */
+  private target: PlayerTarget;
   private seesPlayer = false;
   private lastSeen = -Infinity;
   private perceptionTimer = 0;
@@ -114,6 +116,7 @@ export class Rifleman extends Enemy {
 
   constructor(slot: number, ctx: EnemyContext) {
     super(slot, ctx);
+    this.target = ctx.players[0];
     this.coverBall = new RAPIER.Ball(config.rifleman.coverSearchRadius);
   }
 
@@ -140,7 +143,7 @@ export class Rifleman extends Enemy {
     if (!this.isAlive) return;
     const r = config.rifleman;
     const now = this.ctx.now();
-    const playerAlive = this.ctx.player.damageable.isAlive;
+    const playerAlive = this.target.damageable.isAlive;
     const sees = playerAlive && this.seesPlayer && now - this.lastSeen < r.perceptionInterval * 2;
 
     if (sees) {
@@ -246,7 +249,8 @@ export class Rifleman extends Enemy {
     const r = config.rifleman;
     this.perceptionTimer -= dt;
     if (this.perceptionTimer > 0) return;
-    const player = this.ctx.player;
+    this.pickTarget();
+    const player = this.target;
     if (!player.damageable.isAlive) {
       this.seesPlayer = false;
       this.perceptionTimer = r.perceptionInterval;
@@ -266,8 +270,26 @@ export class Rifleman extends Enemy {
     this.perceptionTimer = r.perceptionInterval;
   }
 
+  /** Keep the target while it is alive and was seen lately; otherwise turn to the nearest player alive. */
+  private pickTarget(): void {
+    const now = this.ctx.now();
+    if (this.target.damageable.isAlive && now - this.lastSeen < config.rifleman.loseSightTime) return;
+    let best = this.target;
+    let bestDistance = Infinity;
+    for (const p of this.ctx.players) {
+      if (!p.damageable.isAlive) continue;
+      const d = this.flatDistance(p.position);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = p;
+      }
+    }
+    if (best !== this.target) this.seesPlayer = false;
+    this.target = best;
+  }
+
   private playerHead(out: Vector3): Vector3 {
-    const p = this.ctx.player;
+    const p = this.target;
     const eye = p.crouching ? config.player.crouchEyeHeight : config.player.standEyeHeight;
     return out.set(p.position.x, p.position.y + eye, p.position.z);
   }
@@ -372,7 +394,7 @@ export class Rifleman extends Enemy {
     );
     if (this.nearby.length === 0) return false;
 
-    const player = this.ctx.player.position;
+    const player = this.target.position;
     this.playerHead(this.headPos);
     const probe = { x: feet.x, y: COVER_RAY_HEIGHT, z: feet.z };
     const fromPlayer = { x: player.x, y: COVER_RAY_HEIGHT, z: player.z };
@@ -463,7 +485,7 @@ export class Rifleman extends Enemy {
       const shield = sight.distance(this.tmp2.set(sx, spot.shieldY, sz), this.direction, COVER_SHIELD_DISTANCE);
       if (shield === null || shield >= COVER_SHIELD_DISTANCE) continue;
       // Can it still see the player from there?
-      const sees = sight.look(this.tmp2.set(spot.x + spot.leanX, config.enemies.eyeHeight, spot.z + spot.leanZ), this.headPos, (c) => c.handle === this.ctx.player.colliderHandle);
+      const sees = sight.look(this.tmp2.set(spot.x + spot.leanX, config.enemies.eyeHeight, spot.z + spot.leanZ), this.headPos, (c) => c.handle === this.target.colliderHandle);
       if (!sees) continue;
       out.set(spot.x, 0, spot.z);
       this.coverLeanX = spot.leanX;
@@ -512,7 +534,7 @@ export class Rifleman extends Enemy {
     let spread = MathUtils.lerp(s.initial, s.aimed, Math.min(1, this.aimTime / s.tightenTime));
     spread += (s.perTenMeters * distance) / 10;
     if (this.fireTarget === 'player') {
-      const v = ctx.player.velocity;
+      const v = this.target.velocity;
       spread += s.targetMoving * (Math.hypot(v.x, v.z) / config.player.walkSpeed);
     }
     this.right.crossVectors(forward, this.up.set(0, 1, 0));
@@ -541,10 +563,11 @@ export class Rifleman extends Enemy {
     this.end.copy(this.eyePos).addScaledVector(this.direction, hit.timeOfImpact);
     ctx.events.emit('enemyFired', { type: this.type, muzzle: this.muzzle, end: this.end });
 
-    if (hit.collider.handle === ctx.player.colliderHandle) {
+    const victim = ctx.players.find((p) => p.colliderHandle === hit.collider.handle);
+    if (victim) {
       // Armor plates absorb it first. The hit comes from the eyes (where the shot was aimed from), for the HUD's
       // damage direction and the camera jolt; `attacker` lets repeat hits from this rifleman share one indicator.
-      applyDamage(ctx.player.damageable, r.damage, 'ballistic', this.eyePos, { source: 'enemy', attacker: this });
+      applyDamage(victim.damageable, r.damage, 'ballistic', this.eyePos, { source: 'enemy', attacker: this });
       return;
     }
     const hitbox = ctx.registry.hitboxOf(hit.collider);

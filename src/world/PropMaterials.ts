@@ -1,6 +1,5 @@
 import { DoubleSide, MeshLambertMaterial, type Texture } from 'three';
 import {
-  createArmorCrateTexture,
   createArmsCrateTexture,
   createBarrelTexture,
   createBurlapTexture,
@@ -14,6 +13,7 @@ import {
   createPoleTexture,
   createShrubTexture,
   createSteelDoorTexture,
+  createSupplyCrateTexture,
 } from './PropTextures';
 
 /**
@@ -53,8 +53,8 @@ export const PropMaterials = {
   concrete: () => material('concrete', createConcreteTexture),
   planks: () => material('planks', createPlankTexture),
   crate: () => material('crate', createCrateTexture),
-  armorCrate: () => material('armorCrate', createArmorCrateTexture),
   armsCrate: () => material('armsCrate', createArmsCrateTexture),
+  supplyCrate: () => material('supplyCrate', createSupplyCrateTexture),
   corrugated: () => material('corrugated', createCorrugatedTexture, { side: DoubleSide }),
   oliveMetal: () => material('oliveMetal', createOliveMetalTexture),
   barrel: () => material('barrel', createBarrelTexture),

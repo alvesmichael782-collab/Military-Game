@@ -254,12 +254,12 @@ export function createCrateTexture(): CanvasTexture {
   return worldTexture(canvas, true);
 }
 
-/** The armor crate's sides: same planks with "ARMOR" stenciled big across the middle. */
-export function createArmorCrateTexture(): CanvasTexture {
+/** The consumables crate's sides: same planks with "SUPPLY" stenciled big across the middle. */
+export function createSupplyCrateTexture(): CanvasTexture {
   const p = paintCrateFace(181);
   const canvas = p.toCanvas();
   const ctx = context2d(canvas);
-  stencilText(ctx, 'ARMOR', 128, 118, 74, STENCIL, 0.85);
+  stencilText(ctx, 'SUPPLY', 128, 118, 64, STENCIL, 0.85);
   stencilText(ctx, 'LOT 14', 128, 178, 24, STENCIL, 0.65);
   return worldTexture(canvas, true);
 }

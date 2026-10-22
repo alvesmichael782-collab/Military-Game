@@ -1,5 +1,5 @@
 import { config } from './config';
-import type { EventBus, GameEvents, GameOverReason } from './EventBus';
+import type { EventBus, GameEvents, GameOverReason, GameResult } from './EventBus';
 
 export const Phase = {
   BUILD: 'BUILD',
@@ -39,13 +39,53 @@ export class GameState {
   private announcedSeconds = -1;
   /** The wave was cleared; the fight ends on the next update, after every `waveCleared` listener has run. */
   private clearPending = false;
+  /** Multiplayer client: the host runs the phases; this copy only repeats what the host announces. */
+  private follower = false;
+  /**
+   * The player dying loses the game (single player). A multiplayer host turns this off and calls `lose`
+   * itself once every player is down.
+   */
+  private loseOnPlayerDeath = true;
 
   constructor(private readonly events: EventBus<GameEvents>) {
-    events.on('playerDied', () => this.lose('playerDied'));
-    events.on('coreDestroyed', () => this.lose('coreDestroyed'));
-    events.on('waveCleared', ({ wave }) => {
-      if (this._phase === Phase.FIGHT && wave === this._wave) this.clearPending = true;
+    events.on('playerDied', () => {
+      if (this.loseOnPlayerDeath && !this.follower) this.lose('playerDied');
     });
+    events.on('coreDestroyed', () => {
+      if (!this.follower) this.lose('coreDestroyed');
+    });
+    events.on('waveCleared', ({ wave }) => {
+      if (!this.follower && this._phase === Phase.FIGHT && wave === this._wave) this.clearPending = true;
+    });
+  }
+
+  /** Multiplayer: who decides the phases. A client follows the host's (`follow`); the host only stops losing on its own death. */
+  setMultiplayer(role: 'host' | 'client'): void {
+    this.loseOnPlayerDeath = false;
+    this.follower = role === 'client';
+  }
+
+  /** Multiplayer client: the host moved to `to`. */
+  follow(to: Phase, wave: number, timeRemaining: number): void {
+    const from = this.started ? this._phase : null;
+    this.started = true;
+    this._phase = to;
+    this._wave = wave;
+    this._timeRemaining = timeRemaining;
+    this.events.emit('phaseChanged', { from, to, wave });
+  }
+
+  /** Multiplayer client: the host's countdown. */
+  followTimer(phase: Phase, seconds: number): void {
+    if (phase !== this._phase) return;
+    this._timeRemaining = seconds;
+    this.announcedSeconds = seconds;
+    this.events.emit('phaseTimer', { phase, seconds });
+  }
+
+  /** Multiplayer client: the host's game ended. Comes right after the phase moved to WON or LOST. */
+  followGameOver(result: GameResult, reason: GameOverReason, wave: number): void {
+    this.events.emit('gameOver', { result, reason, wave });
   }
 
   get phase(): Phase {
@@ -67,7 +107,7 @@ export class GameState {
 
   /** Enter the first BUILD phase and announce it. */
   start(): void {
-    if (this.started) return;
+    if (this.started || this.follower) return;
     this.started = true;
     this.events.emit('phaseChanged', { from: null, to: this._phase, wave: this._wave });
     this.announceTimer();
@@ -75,7 +115,7 @@ export class GameState {
 
   /** Advance phase timers. Call from the fixed-step update. */
   update(dt: number): void {
-    if (!this.started || this.isOver) return;
+    if (!this.started || this.isOver || this.follower) return;
     if (this.clearPending) {
       this.clearPending = false;
       if (this._phase === Phase.FIGHT) this.advance();
@@ -93,23 +133,23 @@ export class GameState {
 
   /** The player is ready: end the build phase now and start the wave. */
   startWaveEarly(): void {
-    if (this.started && this._phase === Phase.BUILD) this.advance();
+    if (this.started && !this.follower && this._phase === Phase.BUILD) this.advance();
   }
 
   /** The player is done reading the wave summary: go straight to the next build phase. */
   skipAftermath(): void {
-    if (this.started && this._phase === Phase.AFTERMATH) this.advance();
+    if (this.started && !this.follower && this._phase === Phase.AFTERMATH) this.advance();
   }
 
   /** Debug: end the current phase now. */
   skipPhase(): void {
-    if (!this.started || this.isOver) return;
+    if (!this.started || this.isOver || this.follower) return;
     this.advance();
   }
 
   /** End the game as a loss immediately (player died, core destroyed, or the debug key). */
   lose(reason: GameOverReason = 'forced'): void {
-    if (!this.started || this.isOver) return;
+    if (!this.started || this.isOver || this.follower) return;
     this.transition(Phase.LOST);
     this.events.emit('gameOver', { result: 'lost', reason, wave: this._wave });
   }

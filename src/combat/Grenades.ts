@@ -32,11 +32,16 @@ export class Grenades {
     return count;
   }
 
-  /** Launch a grenade. Its blast carries the thrower's `source`. Returns false if every pooled grenade is already in the air. */
-  throw(position: Vector3, velocity: Vector3, source: DamageSource): boolean {
+  /**
+   * Launch a grenade. Its blast carries the thrower's `source`. Returns false if every pooled grenade is already in the air.
+   * A `harmless` one is another player's grenade, shown here: it flies and blows up the same, but its damage is dealt on their machine.
+   */
+  throw(position: Vector3, velocity: Vector3, source: DamageSource, harmless = false): boolean {
     const index = this.pool.findIndex((g) => !g.active);
     if (index < 0) return false;
     this.pool[index].launch(position, velocity, source);
+    this.pool[index].harmless = harmless;
+    if (!harmless) this.events.emit('grenadeThrown', { position, velocity });
     this.bounceGap[index] = BOUNCE_SOUND_GAP;
     return true;
   }
@@ -56,7 +61,7 @@ export class Grenades {
       grenade.fuse -= dt;
       if (grenade.fuse <= 0) {
         grenade.deactivate();
-        this.explosions.explode(grenade.position, g.radius, g.damage, grenade.source);
+        this.explosions.explode(grenade.position, g.radius, g.damage, grenade.source, { harmless: grenade.harmless });
       }
     });
   }

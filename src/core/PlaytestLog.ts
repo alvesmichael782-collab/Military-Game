@@ -31,7 +31,17 @@ interface WaveRecord {
   damageTaken: Split & { bySource: Record<PlayerDamageSource, Split> };
   plates: { applied: number; bought: number };
   cashEarned: { total: number; kills: number; headshots: number; waveBonus: number; refunds: number; debug: number };
-  cashSpent: { total: number; walls: number; mgNest: number; repairs: number; plates: number; weapons: number; ammo: number; weaponCrate: number };
+  cashSpent: {
+    total: number;
+    walls: number;
+    mgNest: number;
+    repairs: number;
+    plates: number;
+    grenades: number;
+    weapons: number;
+    ammo: number;
+    crates: number;
+  };
   walls: { built: number; lost: number; repaired: number; removed: number };
   mgNest: { built: number; lost: number; repaired: number };
   core: { hpStart: number; hpEnd: number; maxHp: number };
@@ -81,7 +91,7 @@ function newWave(wave: number, coreHp: number, coreMaxHp: number): WaveRecord {
     },
     plates: { applied: 0, bought: 0 },
     cashEarned: { total: 0, kills: 0, headshots: 0, waveBonus: 0, refunds: 0, debug: 0 },
-    cashSpent: { total: 0, walls: 0, mgNest: 0, repairs: 0, plates: 0, weapons: 0, ammo: 0, weaponCrate: 0 },
+    cashSpent: { total: 0, walls: 0, mgNest: 0, repairs: 0, plates: 0, grenades: 0, weapons: 0, ammo: 0, crates: 0 },
     walls: { built: 0, lost: 0, repaired: 0, removed: 0 },
     mgNest: { built: 0, lost: 0, repaired: 0 },
     core: { hpStart: coreHp, hpEnd: coreHp, maxHp: coreMaxHp },
@@ -231,7 +241,8 @@ export class PlaytestLog {
       else if (reason === 'repair') c.repairs += amount;
       else if (reason === 'weapon') c.weapons += amount;
       else if (reason === 'ammo') c.ammo += amount;
-      else if (reason === 'weaponCrate') c.weaponCrate += amount;
+      else if (reason === 'grenade') c.grenades += amount;
+      else if (reason === 'weaponCrate' || reason === 'consumablesCrate') c.crates += amount;
       else c.plates += amount;
     });
 
@@ -311,8 +322,8 @@ export class PlaytestLog {
       `  plates: ${w.plates.applied} applied, ${w.plates.bought} bought`,
       `  cash: +${money(w.cashEarned.total)} (kills ${money(w.cashEarned.kills)}, headshots ${money(w.cashEarned.headshots)}, ` +
         `wave bonus ${money(w.cashEarned.waveBonus)}), -${money(w.cashSpent.total)} (walls ${money(w.cashSpent.walls)}, ` +
-        `MG ${money(w.cashSpent.mgNest)}, repairs ${money(w.cashSpent.repairs)}, plates ${money(w.cashSpent.plates)}, ` +
-        `weapons ${money(w.cashSpent.weapons)}, ammo ${money(w.cashSpent.ammo)}, weapon crate ${money(w.cashSpent.weaponCrate)})`,
+        `MG ${money(w.cashSpent.mgNest)}, repairs ${money(w.cashSpent.repairs)}, plates ${money(w.cashSpent.plates)}, grenades ${money(w.cashSpent.grenades)}, ` +
+        `weapons ${money(w.cashSpent.weapons)}, ammo ${money(w.cashSpent.ammo)}, crates ${money(w.cashSpent.crates)})`,
       `  walls: ${w.walls.built} built, ${w.walls.lost} lost, ${w.walls.repaired} repaired; core ${Math.round(w.core.hpStart)} -> ${Math.round(w.core.hpEnd)} / ${w.core.maxHp}`,
       `  satchels: ${w.satchels.planted} planted, ${w.satchels.dropped} dropped, ${w.satchels.wallsDestroyed} walls destroyed`,
     ];

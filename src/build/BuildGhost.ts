@@ -1,7 +1,7 @@
 import { Mesh, MeshBasicMaterial, Object3D, PlaneGeometry, type BufferGeometry, type Scene, type Vector3 } from 'three';
 import { config } from '../core/config';
 import { mgNestGeometry } from './MgNest';
-import { weaponCrateGhostGeometry } from './WeaponCrate';
+import { shopCrateGhostGeometry, type ShopCrateType } from './ShopCrate';
 import { yawOfTurns } from './WallGeometry';
 import { wallArmGeometries, wallSegmentGeometry, type WallEnd } from './WallRenderer';
 
@@ -43,6 +43,7 @@ export class BuildGhost {
   private readonly arms: [Mesh, Mesh];
   private readonly nest = new Object3D();
   private readonly crate = new Object3D();
+  private readonly crateBody: Mesh;
   private wallShown = false;
 
   constructor(
@@ -57,8 +58,9 @@ export class BuildGhost {
 
     this.nest.add(this.mesh(mgNestGeometry()), this.footprint(config.build.cellSize * 2, config.build.cellSize * 2));
     this.nest.name = 'buildGhostNest';
-    this.crate.add(this.mesh(weaponCrateGhostGeometry()), this.footprint(config.build.cellSize, config.build.cellSize));
-    this.crate.name = 'buildGhostWeaponCrate';
+    this.crateBody = this.mesh(shopCrateGhostGeometry('weaponCrate'));
+    this.crate.add(this.crateBody, this.footprint(config.build.cellSize, config.build.cellSize));
+    this.crate.name = 'buildGhostCrate';
 
     this.hideMeshes();
     scene.add(wallRoot, this.nest, this.crate);
@@ -90,9 +92,10 @@ export class BuildGhost {
     this.nest.visible = true;
   }
 
-  showWeaponCrate(base: Vector3, yaw: number, valid: boolean): void {
+  showCrate(type: ShopCrateType, base: Vector3, yaw: number, valid: boolean): void {
     this.hide();
     this.setValid(valid);
+    this.crateBody.geometry = shopCrateGhostGeometry(type);
     this.crate.position.copy(base);
     this.crate.rotation.y = yaw;
     this.crate.visible = true;

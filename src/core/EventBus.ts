@@ -91,7 +91,7 @@ export interface CashTransactionEvent extends CashChangedEvent {
 /** What cash was earned from. A kill's payment includes its headshot bonus. */
 export type CashEarnReason = 'kill' | 'waveBonus' | 'refund' | 'debug';
 /** What cash was spent on. */
-export type CashSpendReason = 'wall' | 'mgNest' | 'weaponCrate' | 'repair' | 'plate' | 'weapon' | 'ammo';
+export type CashSpendReason = 'wall' | 'mgNest' | 'weaponCrate' | 'consumablesCrate' | 'repair' | 'plate' | 'grenade' | 'weapon' | 'ammo';
 
 export interface CashEarnedEvent extends CashTransactionEvent {
   reason: CashEarnReason;
@@ -109,6 +109,11 @@ export interface CashInsufficientEvent {
 
 export interface PlatePurchasedEvent {
   /** Dollars paid for the plate. */
+  cost: number;
+}
+
+export interface GrenadePurchasedEvent {
+  /** Dollars paid for the grenade. */
   cost: number;
 }
 
@@ -172,6 +177,8 @@ export interface NavCellsChangedEvent {
 export interface RubbleClearedEvent {
   /** Middle of the pile on the ground. A copy, safe to keep. */
   position: Vector3;
+  /** Id of the structure that collapsed into this pile. */
+  structureId: number;
 }
 
 /** Why a repair stopped. */
@@ -230,20 +237,60 @@ export type BuildPromptEvent =
   /** Aiming at rubble, which F clears for free. */
   | { mode: 'clearRubble' };
 
-/** The "press E" prompt for whatever usable thing the player is looking at. */
-export type InteractPromptEvent =
-  | { mode: 'hidden' }
-  /** Looking at the armor crate. `error` is why buying would fail right now, or null. */
-  | { mode: 'armorCrate'; cost: number; error: string | null };
+/** Which crate shop: the weapon crate or the consumables crate. */
+export type ShopKind = 'weapons' | 'consumables';
 
-/** The weapon crate's "press E" prompt. */
+/** The "press E" prompt while looking at a crate shop with its menu closed. */
 export type ShopPromptEvent =
   | { mode: 'hidden' }
-  /**
-   * Looking at the weapon crate with `item` (a weapon's display name) selected: buy it, or refill it when it is
-   * already carried. `error` is why it would fail right now, or null.
-   */
-  | { mode: 'weaponCrate'; item: string; action: 'buy' | 'refill'; cost: number; error: string | null };
+  /** Looking at a crate in reach: E opens its menu. `title` is the crate's name ("WEAPON CRATE"). */
+  | { mode: 'open'; shop: ShopKind; title: string };
+
+/** One row of a shop menu. The whole row is its buy button. */
+export interface ShopItem {
+  /** What a buy request names: a weapon def id, or a consumable id. */
+  id: string;
+  name: string;
+  /** Silhouette key for the menu (a weapon def id, "armorPlate", "grenade"). */
+  icon: string;
+  /** What pressing the row does now, and its price in dollars. */
+  action: 'buy' | 'refill';
+  price: number;
+  /** A short line under the name ("FULL AUTO", "OWNED", "CARRYING 3 / 5"). */
+  detail: string;
+  /** Why buying would fail right now ("NOT ENOUGH CASH", "AMMO FULL"), or null. */
+  error: string | null;
+  /** False when the player's cash does not cover `price`. */
+  affordable: boolean;
+}
+
+export interface ShopSection {
+  id: string;
+  /** Tab label, e.g. "PISTOLS". A shop with one section shows no tabs. */
+  name: string;
+  items: ShopItem[];
+}
+
+/** A shop menu's full contents. Sent when it opens and again whenever a row changes (cash, loadout, ammo...). */
+export interface ShopCatalogEvent {
+  shop: ShopKind;
+  title: string;
+  sections: ShopSection[];
+}
+
+export interface ShopKindEvent {
+  shop: ShopKind;
+}
+
+/** The menu asked to buy (or refill) one row. */
+export interface ShopBuyRequestEvent extends ShopKindEvent {
+  item: string;
+}
+
+/** A buy request went through. */
+export interface ShopPurchaseEvent extends ShopBuyRequestEvent {
+  cost: number;
+}
 
 export interface PlayerControlChangedEvent {
   /** True while the player has the mouse captured and is in control (alive, no debug camera). */
@@ -266,6 +313,10 @@ export interface DamageDealtEvent {
   headshot: boolean;
   /** True if this hit killed the target. */
   killed: boolean;
+  /** Which player dealt it (see net/PlayerId.ts), or null when the source is not a player. */
+  player: string | null;
+  /** True when a multiplayer client sent the hit on to the host instead of applying it; `killed` is then a guess. */
+  routed: boolean;
 }
 
 export interface WeaponEvent {
@@ -278,6 +329,8 @@ export interface WeaponEvent {
 export interface WeaponFiredEvent extends WeaponEvent {
   /** World position of the muzzle. Only valid while the event dispatches; copy to keep. */
   muzzle: Vector3;
+  /** Where the bullet stopped, or null if it hit nothing in range. Same lifetime as `muzzle`. */
+  end: Vector3 | null;
   /** This shot's recoil, in degrees: the climb, and sideways (positive left). */
   kickUp: number;
   kickSide: number;
@@ -400,6 +453,8 @@ export interface EnemyKilledEvent extends EnemyEvent {
   /** Who dealt the killing blow. Only 'player' kills pay cash. */
   source: DamageSource;
   headshot: boolean;
+  /** Which player got the kill (see net/PlayerId.ts); only that player is paid. Null when no player did. */
+  killer: string | null;
 }
 
 export interface EnemyFiredEvent {
@@ -419,6 +474,8 @@ export interface EnemyCalloutEvent extends WorldSoundEvent {
 }
 
 export interface SatchelArmedEvent extends WorldSoundEvent {
+  /** Which way the bag faces, in radians. */
+  yaw: number;
   /** Seconds to the blast. */
   fuse: number;
   /** True when a dying sapper dropped it rather than planting it. */
@@ -521,6 +578,75 @@ export interface MgHeatChangedEvent {
   overheated: boolean;
 }
 
+/** Another player fired (a gun or the MG), as seen on this machine. */
+export interface AllyFiredEvent {
+  /** Weapon def id, or 'mg'. */
+  weapon: string;
+  /** Sound id for the shot, played where it was fired, or null. */
+  sound: string | null;
+  /** Muzzle, and where the bullet stopped (null if it hit nothing). Only valid while the event dispatches. */
+  muzzle: Vector3;
+  end: Vector3 | null;
+}
+
+/** The player on this machine threw a grenade (multiplayer shows it on the others' screens). */
+export interface GrenadeThrownEvent {
+  /** Only valid while the event dispatches; copy to keep. */
+  position: Vector3;
+  velocity: Vector3;
+}
+
+/** Multiplayer: how many players have pressed the start key to begin the wave (or skip the summary). */
+export interface ReadyChangedEvent {
+  ready: number;
+  total: number;
+  /** The player on this machine is one of them. */
+  self: boolean;
+}
+
+export interface SessionPlayer {
+  id: string;
+  name: string;
+}
+
+/** The game began. Sent once, before the first phase. */
+export interface SessionStartedEvent {
+  multiplayer: boolean;
+  players: readonly SessionPlayer[];
+  localId: string;
+}
+
+/** Multiplayer: the player on this machine is down until the next build phase, or back up. */
+export interface PlayerDownedEvent {
+  down: boolean;
+}
+
+/** One teammate's name tag on screen. */
+export interface AllyTag {
+  id: string;
+  name: string;
+  /** Screen position in CSS pixels, and whether it is in front of the camera at all. */
+  x: number;
+  y: number;
+  visible: boolean;
+  down: boolean;
+}
+
+/** Where every teammate's name tag goes this frame. The array and its items are reused; copy to keep. */
+export interface AllyTagsEvent {
+  tags: readonly AllyTag[];
+}
+
+/** Multiplayer: the link to the host (or a teammate's link) changed. */
+export interface PeerEvent {
+  id: string;
+  name: string;
+}
+
+export interface ConnectionLostEvent {
+  reason: string;
+}
+
 export interface KeybindsChangedEvent {
   /** Every action's primary and alternate key ('' when unbound). A snapshot, safe to keep. */
   binds: BindingMap;
@@ -555,6 +681,7 @@ export interface GameEvents {
   cashSpent: CashSpentEvent;
   cashInsufficient: CashInsufficientEvent;
   platePurchased: PlatePurchasedEvent;
+  grenadePurchased: GrenadePurchasedEvent;
   phaseTimer: PhaseTimerEvent;
   structurePlaced: StructurePlacedEvent;
   structureRemoved: StructureRemovedEvent;
@@ -574,8 +701,16 @@ export interface GameEvents {
   coreDestroyed: Record<string, never>;
   buildToolChanged: BuildToolChangedEvent;
   buildPromptChanged: BuildPromptEvent;
-  interactPromptChanged: InteractPromptEvent;
   shopPromptChanged: ShopPromptEvent;
+  /** A crate shop's menu opened (the mouse is freed for it), with its contents. */
+  shopOpened: ShopCatalogEvent;
+  /** The open menu's contents changed. */
+  shopChanged: ShopCatalogEvent;
+  shopClosed: ShopKindEvent;
+  /** From the shop menu: buy a row, close the menu. */
+  shopBuyRequested: ShopBuyRequestEvent;
+  shopCloseRequested: ShopKindEvent;
+  shopPurchased: ShopPurchaseEvent;
   /** The player tried something the current prompt said they cannot do (place, buy). */
   actionDenied: Record<string, never>;
   damageDealt: DamageDealtEvent;
@@ -625,6 +760,16 @@ export interface GameEvents {
   mgBurstEnded: Record<string, never>;
   mgOverheated: Record<string, never>;
   mgHeatChanged: MgHeatChangedEvent;
+  allyFired: AllyFiredEvent;
+  grenadeThrown: GrenadeThrownEvent;
+  readyChanged: ReadyChangedEvent;
+  sessionStarted: SessionStartedEvent;
+  playerDowned: PlayerDownedEvent;
+  allyTags: AllyTagsEvent;
+  /** A teammate left the game. */
+  peerLeft: PeerEvent;
+  /** A multiplayer client lost its host: the game cannot go on. */
+  connectionLost: ConnectionLostEvent;
   keybindsChanged: KeybindsChangedEvent;
   uiScaleChanged: UiScaleChangedEvent;
   /** The game stopped or went on: the pause menu opened or closed (also before the first click into the game). */

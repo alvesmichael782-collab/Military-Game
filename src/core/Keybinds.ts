@@ -42,7 +42,7 @@ const CONTEXT: Record<Action, Context> = {
   place: 'build',
   rotate: 'build',
   remove: 'build',
-  // Shared by the build tool and the weapon crate.
+  // Build tool items.
   cyclePrev: 'always',
   cycleNext: 'always',
 };

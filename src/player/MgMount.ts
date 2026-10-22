@@ -42,6 +42,8 @@ export class MgMount {
   private promptShown = false;
   private localYaw = 0;
   private pitch = 0;
+  /** Multiplayer: is another player on this nest's gun? Then it cannot be mounted here. */
+  private taken: (nestId: number) => boolean = () => false;
 
   private readonly forward = new Vector3();
   private readonly right = new Vector3();
@@ -67,6 +69,16 @@ export class MgMount {
     events.on('segmentDestroyed', gone);
     events.on('playerDied', () => this.dismount('died'));
     events.on('gameOver', () => this.dismount('gameOver'));
+  }
+
+  /** Multiplayer: tell the mount which nests another player is already on. */
+  setTakenCheck(taken: (nestId: number) => boolean): void {
+    this.taken = taken;
+  }
+
+  /** Get off the gun now (multiplayer: another player got on it first). */
+  release(): void {
+    this.dismount('player');
   }
 
   /** The nest the player is on, or null. */
@@ -172,7 +184,7 @@ export class MgMount {
 
   /** Distance from the eye to the gun if the player can mount it from where they are, else Infinity. */
   private mountDistance(nest: MgNest, aim: AimState): number {
-    if (!nest.isAlive) return Infinity;
+    if (!nest.isAlive || this.taken(nest.id)) return Infinity;
     const mg = config.mg;
     // Behind the gun, inside the nest's width, and close enough to its grips.
     nest.toLocal(this.body.position, this.local);

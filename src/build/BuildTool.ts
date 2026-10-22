@@ -17,7 +17,9 @@ import { StructureHighlight } from './StructureHighlight';
 import { wallYaw, type StructureManager } from './StructureManager';
 import { wallEnds, type WallEnd } from './WallRenderer';
 import { JOINT_RADIUS } from './WallGeometry';
-import { WEAPON_CRATE_SIZE } from './WeaponCrate';
+import { SHOP_CRATE_SIZES, type ShopCrateType } from './ShopCrate';
+import type { StructureCommands } from './StructureCommands';
+import { localPlayerId } from '../net/PlayerId';
 
 export const BuildError = {
   OUTSIDE: 'OUTSIDE BUILD AREA',
@@ -25,7 +27,7 @@ export const BuildError = {
   PLAYER: 'YOU ARE IN THE WAY',
   CASH: 'NOT ENOUGH CASH',
   LIMIT: 'MG NEST LIMIT REACHED',
-  CRATE_LIMIT: 'WEAPON CRATE LIMIT REACHED',
+  CRATE_LIMIT: 'CRATE LIMIT REACHED',
   REACH: 'OUT OF REACH',
 } as const;
 
@@ -82,7 +84,7 @@ export class BuildTool {
   private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: -1 });
   private readonly wallBox: RAPIER.Cuboid;
   private readonly nestBox: RAPIER.Cuboid;
-  private readonly crateBox: RAPIER.Cuboid;
+  private readonly crateBoxes: Record<ShopCrateType, RAPIER.Cuboid>;
 
   constructor(
     scene: Scene,
@@ -92,6 +94,8 @@ export class BuildTool {
     private readonly purse: Purse,
     private readonly events: EventBus<GameEvents>,
     private readonly playerCollider: number,
+    /** Where placements and removals go: the structures themselves, or (multiplayer client) the host. */
+    private commands: StructureCommands = structures,
   ) {
     this.ghost = new BuildGhost(scene, (shown) => structures.previewWall(shown ? this.edge : null));
     this.highlight = new StructureHighlight(scene);
@@ -100,8 +104,11 @@ export class BuildTool {
     // The nest checks its whole square, so the player cannot build it around themselves either.
     const outer = NEST.ring + NEST.bagDepth / 2 - SHRINK;
     this.nestBox = new RAPIER.Cuboid(outer, NEST_WALL_HEIGHT / 2, outer);
-    const c = WEAPON_CRATE_SIZE;
-    this.crateBox = new RAPIER.Cuboid(c.x / 2 - SHRINK, c.y / 2 - GROUND_CLEARANCE, c.z / 2 - SHRINK);
+    const crateBox = (type: ShopCrateType): RAPIER.Cuboid => {
+      const c = SHOP_CRATE_SIZES[type];
+      return new RAPIER.Cuboid(c.x / 2 - SHRINK, c.y / 2 - GROUND_CLEARANCE, c.z / 2 - SHRINK);
+    };
+    this.crateBoxes = { weaponCrate: crateBox('weaponCrate'), consumablesCrate: crateBox('consumablesCrate') };
 
     events.on('phaseChanged', ({ to }) => {
       this.phase = to;
@@ -110,6 +117,11 @@ export class BuildTool {
     events.on('cashChanged', ({ cash }) => {
       this.cash = cash;
     });
+  }
+
+  /** Multiplayer: send placements and removals here instead (to the host, from a client). */
+  setCommands(commands: StructureCommands): void {
+    this.commands = commands;
   }
 
   /** True while the tool is out. The rifle and grenades are unavailable meanwhile. */
@@ -157,7 +169,8 @@ export class BuildTool {
       this.clearRubble(rubble);
     } else if (aimed) {
       this.ghost.hide();
-      this.setPrompt({ mode: 'remove', item: nameOf(aimed), refund: refundOf(aimed.type) });
+      // Removing refunds whoever built it, so another player's structure gives you nothing back.
+      this.setPrompt({ mode: 'remove', item: nameOf(aimed), refund: aimed.owner === localPlayerId() ? refundOf(aimed.type) : 0 });
       if (this.wantRemove) this.remove(aimed);
     } else {
       // The player's facing, snapped to a quarter turn, plus their R turns.
@@ -184,7 +197,7 @@ export class BuildTool {
   private preview(buildable: Buildable, facing: number): string | null {
     if (buildable.type === 'wall') return this.previewWall(facing);
     if (buildable.type === 'mgNest') return this.previewNest(facing);
-    return this.previewCrate(facing);
+    return this.previewCrate(buildable.type, facing);
   }
 
   // ---- Walls ----
@@ -243,24 +256,24 @@ export class BuildTool {
     return null;
   }
 
-  // ---- Weapon crate ----
+  // ---- Shop crates ----
 
   /** Snap the crate to the center of the cell under the ground point. */
-  private previewCrate(facing: number): string | null {
+  private previewCrate(type: ShopCrateType, facing: number): string | null {
     const onMap = this.grid.cellAt(this.ground.x, this.ground.z, this.cell);
     this.base.set(this.grid.centerX(this.cell.i), 0, this.grid.centerZ(this.cell.j));
     const yaw = facing * QUARTER_TURN;
-    const error = onMap ? this.checkCrate(yaw) : BuildError.OUTSIDE;
-    this.ghost.showWeaponCrate(this.base, yaw, error === null);
+    const error = onMap ? this.checkCrate(type, yaw) : BuildError.OUTSIDE;
+    this.ghost.showCrate(type, this.base, yaw, error === null);
     return error;
   }
 
-  private checkCrate(yaw: number): string | null {
+  private checkCrate(type: ShopCrateType, yaw: number): string | null {
     const buildable = BUILDABLES[this.selected];
-    if (this.structures.countOf('weaponCrate') >= buildable.limit) return BuildError.CRATE_LIMIT;
+    if (this.structures.countOf(type) >= buildable.limit) return BuildError.CRATE_LIMIT;
     if (!this.grid.isInBuildRadius(this.cell.i, this.cell.j)) return BuildError.OUTSIDE;
     if (!this.grid.isFree(this.cell.i, this.cell.j)) return BuildError.OCCUPIED;
-    const overlap = this.overlap(this.crateBox, yaw, false);
+    const overlap = this.overlap(this.crateBoxes[type], yaw, false);
     if (overlap) return overlap;
     if (this.cash < buildable.cost) return BuildError.CASH;
     return null;
@@ -329,21 +342,23 @@ export class BuildTool {
       return;
     }
     if (!this.purse.spend(buildable.cost, buildable.type)) return;
-    if (buildable.type === 'wall') this.structures.placeWall(this.edge, buildable.cost);
-    else if (buildable.type === 'mgNest') this.structures.placeMgNest({ ...this.vertex }, facing * QUARTER_TURN, buildable.cost);
-    else this.structures.placeWeaponCrate({ ...this.cell }, facing * QUARTER_TURN, buildable.cost);
+    if (buildable.type === 'wall') this.commands.placeWall({ ...this.edge }, buildable.cost);
+    else if (buildable.type === 'mgNest') this.commands.placeMgNest({ ...this.vertex }, facing * QUARTER_TURN, buildable.cost);
+    else this.commands.placeShopCrate(buildable.type, { ...this.cell }, facing * QUARTER_TURN, buildable.cost);
   }
 
   private clearRubble(pile: RubblePile): void {
-    this.structures.clearRubble(pile);
+    this.commands.clearRubble(pile);
     this.ghost.hide();
   }
 
+  /** Take it down. The refund goes to whoever built it (in multiplayer that may be another player). */
   private remove(structure: Structure): void {
     const refund = refundOf(structure.type);
+    const mine = structure.owner === localPlayerId();
     this.setTarget(null);
-    this.structures.remove(structure, refund);
-    this.purse.earn(refund, 'refund');
+    this.commands.remove(structure, refund);
+    if (mine) this.purse.earn(refund, 'refund');
   }
 
   private setTarget(structure: Structure | null): void {

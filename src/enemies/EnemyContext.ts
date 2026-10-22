@@ -32,7 +32,8 @@ export interface EnemyContext {
   readonly grid: BuildGrid;
   readonly registry: DamageableRegistry;
   readonly events: EventBus<GameEvents>;
-  readonly player: PlayerTarget;
+  /** Every player in the game (one in single player). Riflemen pick their target from these. */
+  readonly players: readonly PlayerTarget[];
   readonly core: CoreTarget;
   readonly sight: SightBudget;
   readonly satchels: Satchels;

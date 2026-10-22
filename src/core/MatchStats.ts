@@ -1,6 +1,7 @@
 import { config } from './config';
 import type { EventBus, GameEvents } from './EventBus';
 import { Phase } from './GameState';
+import { localPlayerId } from '../net/PlayerId';
 
 interface Tally {
   kills: number;
@@ -21,8 +22,9 @@ export class MatchStats {
   private wavesSurvived = 0;
 
   constructor(private readonly events: EventBus<GameEvents>) {
-    events.on('enemyKilled', ({ source, headshot }) => {
-      if (source !== 'player') return;
+    events.on('enemyKilled', ({ source, headshot, killer }) => {
+      // Only this machine's player's kills: in multiplayer each player sees their own numbers.
+      if (source !== 'player' || killer !== localPlayerId()) return;
       this.wave.kills++;
       this.total.kills++;
       if (headshot) {

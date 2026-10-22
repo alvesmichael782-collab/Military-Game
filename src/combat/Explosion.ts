@@ -24,6 +24,8 @@ export interface ExplodeOptions {
   kind?: ExplosionKind;
   /** Full damage inside this distance. Defaults to the frag grenade's. */
   fullDamageRadius?: number;
+  /** Effects and shove only, no damage: a multiplayer copy of a blast whose damage is dealt on another machine. */
+  harmless?: boolean;
 }
 
 /** Explosions: area damage with falloff, physics impulses, and the `explosion` event that drives effects, shake and sound. */
@@ -50,7 +52,7 @@ export class Explosions {
 
     // Collect first: damage can kill and change the registry's contents.
     const hits: [target: Damageable, scale: number][] = [];
-    for (const target of this.registry.all) {
+    if (!options.harmless) for (const target of this.registry.all) {
       if (!target.isAlive) continue;
       const distance = target.blastDistance ? target.blastDistance(position) : target.position.distanceTo(position);
       const scale = blastFalloff(distance, radius, fullRadius);

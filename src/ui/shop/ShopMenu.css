@@ -1,0 +1,291 @@
+/*
+ * Crate shop menu. Part of the HUD layer (native resolution, sized in --rp, follows the UI size), but it takes the
+ * mouse. Square corners throughout, the HUD's warm white and red, rows that invert to white when highlighted.
+ */
+.shop {
+  --shop-ink: #15130f;
+  --shop-row: rgba(236, 230, 218, 0.07);
+  --shop-row-line: rgba(236, 230, 218, 0.12);
+  --shop-dim: rgba(236, 230, 218, 0.6);
+  --shop-error: #ff5a4e;
+
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.shop[hidden] {
+  display: none;
+}
+
+/* Darkens the left of the screen behind the column; the world stays readable on the right. */
+.shop__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(10, 9, 7, 0.86) 0%,
+    rgba(10, 9, 7, 0.74) calc(860 * var(--rp)),
+    rgba(10, 9, 7, 0.32) calc(1240 * var(--rp)),
+    rgba(10, 9, 7, 0.12) 100%
+  );
+}
+
+.shop__panel {
+  position: absolute;
+  left: calc(120 * var(--rp));
+  top: calc(130 * var(--rp));
+  width: min(calc(780 * var(--rp)), calc(100vw - 240 * var(--rp)));
+  max-height: calc(100% - 400 * var(--rp));
+  display: flex;
+  flex-direction: column;
+}
+
+.shop__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(24 * var(--rp));
+  margin-bottom: calc(18 * var(--rp));
+}
+
+.shop__title {
+  margin: 0;
+  font-size: calc(50 * var(--rp));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: calc(3 * var(--rp));
+  white-space: nowrap;
+}
+
+.shop__cash {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: calc(44 * var(--rp));
+  padding: 0 calc(10 * var(--rp)) 0 calc(28 * var(--rp));
+}
+
+.shop__cash > .hud-smear {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.shop__cash-amount {
+  position: relative;
+  font-size: calc(28 * var(--rp));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: calc(1.5 * var(--rp));
+}
+
+.shop__tabs {
+  display: flex;
+  gap: calc(30 * var(--rp));
+  margin-bottom: calc(14 * var(--rp));
+  border-bottom: calc(1 * var(--rp)) solid var(--shop-row-line);
+}
+
+.shop__tabs[hidden] {
+  display: none;
+}
+
+/* Plain buttons, at zero specificity so each element's own rules below win. */
+:where(button.shop__tab, button.shop__row, button.shop__hint) {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-shadow: inherit;
+  cursor: pointer;
+}
+
+.shop__tab {
+  position: relative;
+  padding: calc(6 * var(--rp)) 0 calc(10 * var(--rp));
+  font-size: calc(20 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(2.5 * var(--rp));
+  white-space: nowrap;
+  color: var(--shop-dim);
+  transition: color 120ms ease-out;
+}
+
+.shop__tab:hover,
+.shop__tab[aria-selected='true'] {
+  color: var(--hud-white);
+}
+
+/* The current section is underlined in the HUD red, over the tab strip's rule. */
+.shop__tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--rp));
+  height: calc(3 * var(--rp));
+  background: var(--hud-red);
+}
+
+.shop__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--rp));
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 230, 218, 0.35) transparent;
+}
+
+/* One item: the whole bar is the buy button. */
+.shop__row {
+  flex: none;
+  display: grid;
+  grid-template-columns: calc(180 * var(--rp)) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(26 * var(--rp));
+  height: calc(84 * var(--rp));
+  padding: 0 calc(28 * var(--rp)) 0 calc(20 * var(--rp));
+  background: var(--shop-row);
+  text-align: left;
+  transition:
+    background-color 90ms ease-out,
+    color 90ms ease-out;
+}
+
+.shop__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(60 * var(--rp));
+}
+
+.shop__icon img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 calc(1 * var(--rp)) calc(2 * var(--rp)) rgba(0, 0, 0, 0.55));
+}
+
+.shop__text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--rp));
+  min-width: 0;
+}
+
+.shop__name {
+  font-size: calc(28 * var(--rp));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: calc(1.5 * var(--rp));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop__detail {
+  font-size: calc(15 * var(--rp));
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: calc(2 * var(--rp));
+  color: var(--shop-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop__price {
+  font-size: calc(30 * var(--rp));
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: calc(1 * var(--rp));
+  white-space: nowrap;
+}
+
+/* Something stops this purchase: the reason replaces the detail line, in red, and the item dims. */
+.shop__row.is-unavailable .shop__detail {
+  color: var(--shop-error);
+}
+
+.shop__row.is-unavailable .shop__icon,
+.shop__row.is-unavailable .shop__name {
+  opacity: 0.55;
+}
+
+.shop__row.is-unaffordable .shop__price {
+  color: var(--shop-error);
+}
+
+/* The row under the mouse: white bar, everything on it black. */
+.shop__row:hover {
+  background: var(--hud-white);
+  color: var(--shop-ink);
+  text-shadow: none;
+}
+
+.shop__row:hover .shop__icon img {
+  filter: brightness(0);
+}
+
+.shop__row:hover .shop__detail {
+  color: rgba(21, 19, 15, 0.68);
+}
+
+.shop__row.is-unavailable:hover .shop__detail,
+.shop__row.is-unaffordable:hover .shop__price {
+  color: var(--hud-red);
+}
+
+.shop__row.is-unavailable:hover .shop__icon,
+.shop__row.is-unavailable:hover .shop__name {
+  opacity: 0.6;
+}
+
+.shop__row:active {
+  transform: translateY(calc(1 * var(--rp)));
+}
+
+.shop__hints {
+  display: flex;
+  gap: calc(28 * var(--rp));
+  margin-top: calc(18 * var(--rp));
+  font-size: calc(15 * var(--rp));
+  font-weight: 600;
+  letter-spacing: calc(2 * var(--rp));
+  text-transform: uppercase;
+  color: var(--shop-dim);
+}
+
+.shop__hint {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--rp));
+  padding: 0;
+  white-space: nowrap;
+}
+
+button.shop__hint:hover {
+  color: var(--hud-white);
+}
+
+.shop__hint kbd {
+  min-width: calc(26 * var(--rp));
+  padding: calc(3 * var(--rp)) calc(7 * var(--rp)) calc(2 * var(--rp));
+  border: calc(1 * var(--rp)) solid rgba(236, 230, 218, 0.45);
+  font-family: inherit;
+  font-size: calc(13 * var(--rp));
+  line-height: 1;
+  text-align: center;
+  color: var(--hud-white);
+}

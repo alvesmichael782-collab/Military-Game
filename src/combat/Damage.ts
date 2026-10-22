@@ -1,5 +1,6 @@
 import type { Vector3 } from 'three';
 import type { EventBus, GameEvents } from '../core/EventBus';
+import { localPlayerId } from '../net/PlayerId';
 import type { Damageable } from './Damageable';
 import type { DamageType } from './DamageType';
 
@@ -18,6 +19,21 @@ export interface DamageInfo {
    * Left out for blasts and anything else without a lasting shooter.
    */
   attacker?: object;
+  /** Which player dealt it (see net/PlayerId.ts), for source 'player'. Defaults to the player on this machine. */
+  player?: string;
+}
+
+/**
+ * Decides where a hit is applied. Returns null to apply it here, as usual; otherwise the router has sent it on
+ * (a multiplayer client sends hits on enemies and structures to the host) and returns whether it should kill.
+ */
+export type DamageRouter = (target: Damageable, amount: number, type: DamageType, position: Vector3, info: DamageInfo) => boolean | null;
+
+let router: DamageRouter | null = null;
+
+/** Install (or remove, with null) the multiplayer damage router. */
+export function setDamageRouter(next: DamageRouter | null): void {
+  router = next;
 }
 
 let events: EventBus<GameEvents> | null = null;
@@ -40,8 +56,10 @@ export function applyDamage(
 ): boolean {
   if (!target.isAlive || amount <= 0) return false;
 
-  target.takeDamage(amount, type, position, info);
-  const killed = !target.isAlive;
+  const player = info.source === 'player' ? (info.player ?? localPlayerId()) : null;
+  const routed = router ? router(target, amount, type, position, info) : null;
+  if (routed === null) target.takeDamage(amount, type, position, info);
+  const killed = routed ?? !target.isAlive;
 
   events?.emit('damageDealt', {
     target,
@@ -51,6 +69,8 @@ export function applyDamage(
     source: info.source ?? 'environment',
     headshot: info.headshot ?? false,
     killed,
+    player,
+    routed: routed !== null,
   });
   return killed;
 }

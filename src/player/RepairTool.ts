@@ -56,13 +56,18 @@ export class RepairTool {
 
   constructor(
     private readonly world: RAPIER.World,
-    private readonly structures: RepairTargets,
+    private structures: RepairTargets,
     private readonly purse: Purse,
     private readonly events: EventBus<GameEvents>,
   ) {
     events.on('cashChanged', ({ cash }) => {
       this.cash = cash;
     });
+  }
+
+  /** Multiplayer: repair through these instead, so the other machines hear of it. */
+  setTargets(targets: RepairTargets): void {
+    this.structures = targets;
   }
 
   /** True while repairing. The rifle and grenades are unavailable meanwhile. */

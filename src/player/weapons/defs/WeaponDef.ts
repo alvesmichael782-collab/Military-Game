@@ -15,6 +15,15 @@ export interface Vec3 {
 export type SlotType = 'gun' | 'melee';
 export type FireMode = 'semi' | 'auto' | 'burst';
 
+/** The weapon crate menu's sections, in tab order. A section with no weapons is left out. */
+export const WEAPON_CATEGORIES = [
+  { id: 'pistol', name: 'PISTOLS' },
+  { id: 'smg', name: 'SMGS' },
+  { id: 'assaultRifle', name: 'ASSAULT RIFLES' },
+  { id: 'melee', name: 'MELEE' },
+] as const;
+export type WeaponCategory = (typeof WEAPON_CATEGORIES)[number]['id'];
+
 /**
  * A weapon's sounds, as sound bank ids (see core/audio/sounds.ts). Ids read `weapon.<id>.<action>`, so real
  * recordings plug in by giving the bank entry its own files.
@@ -42,8 +51,6 @@ export interface WeaponModel {
   /** Resting position and rotation (radians) in front of the camera at the hip. */
   readonly position: Vec3;
   readonly rotation: Vec3;
-  /** Size of the floating copy above the weapon crate, as a multiple of the real size. */
-  readonly displayScale: number;
   /** Seconds to put the weapon away and to bring it out (a switch is one plus the other, about 0.4-0.6 s). */
   readonly holsterTime: number;
   readonly drawTime: number;
@@ -247,6 +254,8 @@ interface DefBase {
   /** Name on the HUD and in the weapon crate prompt. */
   readonly displayName: string;
   readonly slot: SlotType;
+  /** Weapon crate section. */
+  readonly category: WeaponCategory;
   /** Weapon crate price, in dollars. */
   readonly price: number;
   /** Top speed multiplier while this weapon is in hand. */

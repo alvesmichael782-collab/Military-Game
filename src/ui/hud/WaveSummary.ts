@@ -16,10 +16,17 @@ export class WaveSummary {
   constructor(events: EventBus<GameEvents>, parent: HTMLElement, keys: PromptKeys) {
     this.panel = new SummaryPanel(parent, 'hud-wave-summary', 3301);
     let seconds: number | null = null;
+    /** Multiplayer: everyone must press the key to skip. */
+    let ready: { ready: number; total: number; self: boolean } | null = null;
     const footer = (): string => {
-      const skip = `Press ${keys.name('startWave')} to skip`;
+      let skip = `Press ${keys.name('startWave')} to skip`;
+      if (ready) skip = ready.self ? `Waiting for the squad  ${ready.ready}/${ready.total}` : `${skip}  ${ready.ready}/${ready.total}`;
       return seconds === null ? skip : `Build phase in ${seconds}  -  ${skip}`;
     };
+    events.on('readyChanged', (r) => {
+      ready = { ...r };
+      if (this.panel.visible) this.panel.setFooter(footer());
+    });
     events.on('waveSummary', (s) => {
       seconds = null;
       this.panel.show(

@@ -37,10 +37,11 @@ The MVP includes ONLY:
 
 - One map: Dust Ridge (flat desert, 200 x 200 m, 2 enemy spawn points)
 - Player: first-person movement, armor plates plus health, hitscan guns and a knife (see "Weapons and Loadout"), frag grenades, repair tool
-- Build mode: first-person placement (aim at the ground, ghost preview, place), 2 m snap grid, one wall type, outpost core, one MG nest
+- Build mode: first-person placement (aim at the ground, ghost preview, place), 2 m snap grid, one wall type, outpost core, one MG nest, the weapon crate and the consumables crate (see "Crate Shops")
 - Destruction: wall segments with 4 damage states (intact, damaged, breached, collapsed), debris, rubble
 - Enemies: riflemen and sappers
 - Waves: 10 waves, build -> fight -> aftermath loop; win after wave 10, lose if the core is destroyed
+- Start screen and co-op multiplayer, 1-4 players (see "Start Screen and Multiplayer")
 - Cash economy: earned from kills, spent on building, repairs, armor plates, and weapons
 - The HUD from `UI-Model.jpg` (see HUD Spec) and a retro render filter
 
@@ -54,7 +55,7 @@ There is no shield. The player has **armor plates** and **health**.
 - Damage drains armor first, one plate segment at a time, then health.
 - Armor does NOT regenerate. The player restores it by applying plates.
 - The player carries spare plates (start with 3, carry up to 5, in config). Hold V to apply one plate (about 1 second each, can't shoot while plating, chains if V stays held).
-- Spare plates are bought with cash at the armor crate next to the outpost core (look at it and press E). Cost per plate is in config (start at $250).
+- Spare plates are bought with cash at the consumables crate (see "Crate Shops"). Cost per plate is in config (`economy.prices.armorPlate`).
 - Health is 100, does not regenerate during a fight, and refills to full at the start of each build phase.
 - Events: `armorChanged`, `plateApplied`, `platePurchased`, `playerDamaged`, `playerDied`.
 
@@ -74,7 +75,7 @@ Every weapon is one data file in `src/player/weapons/defs/` (stats, price, fire 
 
 **Switching:** holster the current weapon, then draw the next (per weapon `holsterTime` + `drawTime`, about 0.4-0.6 s). Each gun keeps its own magazine and reserve. Switching cancels reload and ADS. No switching while mounted on the MG, building, repairing, or plating. The HUD's weapon name and ammo follow the weapon in hand; the knife hides the ammo numbers. Events: `weaponEquipped`, `weaponPurchased`, `loadoutChanged`.
 
-**Weapon crate:** a buildable, temporary shop ("WEAPON CRATE" in the build tool, after the MG nest): one cell, price and limit in config (`economy.prices.weaponCrate`, `build.maxWeaponCrates`), olive crate stenciled "ARMS", not damageable, F removes it. In any phase, look at it within `config.weaponCrate.useRange`: a small copy of the selected weapon turns above it, the left and right arrow keys (`config.keybinds.cyclePrev` / `cycleNext`) cycle every weapon (cheapest first), and E buys it (or refills a carried gun) through the CashWallet and the rules above. E stays context-sensitive with the armor crate, repairs and the MG nest (closest target wins).
+**Weapon crate:** a buildable shop (see "Crate Shops"). Its menu lists every weapon by section (`category` in each def: pistols, SMGs, assault rifles, melee; cheapest first in each), and buying goes through the CashWallet and the rules above (a carried gun's row refills it instead).
 
 **Knife:** tap to slash (alternating sides), hold to stab; hits through `applyDamage` with source `player` and type `melee`. Walls take `config.destruction.damageMultipliers.melee` of it (very little). No ADS.
 
@@ -85,8 +86,34 @@ Every weapon is one data file in `src/player/weapons/defs/` (stats, price, fire 
 The player earns **cash**, never "points" or "salvage". Cash is always shown with a dollar sign.
 
 - Earned from kills (rifleman $100, sapper $200, headshot bonus +$50) and a wave-clear bonus. All values in config.
-- Spent on walls, repairs, the MG nest, armor plates, the weapon crate, and weapons and ammo bought from it.
+- In multiplayer every player has their own cash. A kill pays only the player who made it; the wave-clear bonus pays every player in full; each player pays for what they build, repair and buy. Removing a structure refunds whoever built it.
+- Spent on walls, repairs, the MG nest, the two crates, armor plates and grenades from the consumables crate, and weapons and ammo from the weapon crate.
 - Events: `cashEarned`, `cashSpent`.
+
+## Crate Shops
+
+There is no fixed armor crate. Both shops are buildable structures (build tool, after the MG nest): one cell, price and limit in config (`economy.prices.weaponCrate` / `consumablesCrate`, `build.maxWeaponCrates` / `maxConsumablesCrates`), not damageable, F removes them. Code: `src/build/ShopCrate.ts` (structure and models), `src/economy/CrateShop.ts` (shared shop logic), `WeaponShop.ts`, `ConsumablesShop.ts`, `src/ui/shop/` (menu and silhouettes).
+
+- **Weapon crate:** olive crate stenciled "ARMS". Sells weapons (see "Weapons and Loadout").
+- **Consumables crate:** bare wood crate stenciled "SUPPLY". Sells armor plates and frag grenades, one per click, up to what the player can carry (`armor.maxSpares`, `grenade.maxCount`; prices `economy.prices.armorPlate` / `grenade`). A new consumable is one entry in `ConsumablesShop.ts`.
+- **Opening:** in any phase, look at a crate within its `useRange` and press E (context-sensitive with repairs and the MG nest; closest target wins). The menu frees the mouse but does NOT pause the game. E, Esc or Tab closes it and captures the mouse again (the pause menu must not flash up while the browser re-captures it). It also closes on death, game over, or leaving the window.
+- **Menu:** a column on the left: crate name and cash, one tab per section (no tabs for a single section), and one full-width row per item: a white silhouette (weapons rendered side-on from their models at startup, consumables drawn shapes), name, a detail line, and the price. The whole row is the buy button. Only the row directly under the mouse is highlighted (nothing is highlighted otherwise): it turns white with the silhouette and all text black. Click buys; A/D or left/right switch sections. A row that cannot be bought shows the reason in red in place of the detail line and shakes when tried; a purchase flashes the row red. Square corners, HUD fonts and colors, no emojis.
+- **Events:** `shopPromptChanged`, `shopOpened` / `shopChanged` (the full catalog), `shopClosed`, `shopBuyRequested`, `shopCloseRequested`, `shopPurchased`, then `platePurchased`, `grenadePurchased` or `weaponPurchased`. The menu never reads game state.
+
+## Start Screen and Multiplayer
+
+**Start screen** (`src/ui/start/`): the title and SINGLE PLAYER / MULTIPLAYER on the left over the live map (a slow orbit around the core, through the retro filter), in the pause menu's style (bevelled panels, khaki text, one red accent, HUD fonts). The game loads behind it. Multiplayer opens a panel: callsign (saved), CREATE LOBBY, or JOIN with a 5-character code. The lobby shows the code (COPY), the squad (4 slots, HOST / YOU, LOADING / READY) and START for the host once everyone has loaded. After a single player game, Enter restarts straight into a new one; after a multiplayer game it goes back to the menu.
+
+**Networking** (`src/net/`): co-op for up to 4 players over WebRTC data channels with PeerJS (its public broker only introduces the peers; the host's peer id is built from the lobby code). Star layout, host-authoritative world. `NetSession` (lobby, batched messages, one flush per frame), `NetGame` (coordinator), `protocol.ts` (every message), `EventRelay` (host events clients replay), `EnemySync` (host snapshots, client interpolation), `RemotePlayers` (teammates), `StructureSync` (structures). Rates and limits in `config.multiplayer`.
+- **Host** runs everything as in single player: phases, the wave director, enemy AI, satchels, structure HP, the core. Waves grow by `extraPlayerBudget` per extra player.
+- **Clients** run their own player (movement, aim, weapons, cash, shops, build tool) and follow the host: `GameState.follow`, `EnemyManager.setReplica` (soldiers posed from snapshots, hitboxes kept, no AI), `WaveDirector.disable`. Their hits on enemies, structures and the core go to the host through the damage router (`setDamageRouter` in `combat/Damage.ts`), which applies them with that player's id, so kill credit is right. Builds, removals, rubble clears and repairs are requests to the host (`StructureCommands`); HP changes come back as differences.
+- **Every machine** sends its player's state (`playerSendRate`), shots (`allyFired`: flash, tracer, positioned sound), impacts and grenades. Other players' grenades and the host's satchels are mirrored as `harmless` copies; only the owner's copy deals damage.
+- **Teammates** are soldier bodies in `allyUniform` with name tags, a capsule on the player layer (enemies see, shoot and bump them; players' bullets pass through: no friendly fire), and enemy targets (`EnemyContext.players`; riflemen pick the nearest seen player). Enemy hits on a teammate are worked out on the host and sent to that player's machine.
+- **Down, not out:** a player at 0 health is down ("YOU ARE DOWN") until the next build phase, then back at full health at their spawn. The game is lost when every player is down at once, or the core falls.
+- **Votes:** Enter starts the wave (build) or skips the summary (aftermath) only once every player has pressed it (`readyChanged`, shown in the phase banner and summary).
+- The pause menu never pauses in multiplayer. The MG takes one gunner at a time. If the host leaves, clients get a "Connection lost" screen with a way back to the menu; a client leaving just disappears for the others.
+- Kill and kill-related events carry player ids (`net/PlayerId.ts`: host `p0`, clients `p1`-`p3`; always `p0` in single player).
+- Testing: WebRTC may not connect two tabs on one machine (VPN, firewall). Dev builds with `?loopback` link tabs of one browser over a BroadcastChannel instead (`net/LoopbackPeer.ts`, stripped from production builds).
 
 ## Visual Style (2001-2004 shooters)
 
@@ -178,7 +205,8 @@ src/
   destruction/       // segment HP, damage states, debris, rubble
   enemies/           // AI, spawner, wave director
   combat/            // damage, projectiles, explosions
-  economy/           // cash wallet, prices, armor crate
+  economy/           // cash wallet, prices, crate shops
+  net/               // multiplayer: session, sync, teammates
   ui/                // HUD, build menu, wave summary
   assets/            // models, textures, sounds, fonts
 References/          // reference images (read-only, never ship these)

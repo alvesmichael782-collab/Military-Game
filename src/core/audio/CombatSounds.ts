@@ -54,6 +54,10 @@ export function connectCombatSounds(events: EventBus<GameEvents>, sounds: SoundB
   });
   events.on('armorBroken', () => sounds.play('player.armor.shatter'));
   events.on('heartbeat', ({ strength }) => sounds.play('player.heartbeat', { volume: 0.5 + 0.5 * strength }));
+  // Teammates' guns, where they were fired (multiplayer).
+  events.on('allyFired', ({ sound, muzzle }) => {
+    if (sound) sounds.play(sound, { position: muzzle });
+  });
   events.on('grenadeBounced', ({ position }) => sounds.play('grenade.bounce', { position }));
   events.on('explosion', ({ position, kind }) => {
     // Satchels fall back to the frag blast until they have their own recording.

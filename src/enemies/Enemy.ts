@@ -8,7 +8,7 @@ import { config } from '../core/config';
 import type { EnemyContext } from './EnemyContext';
 import type { EnemyType } from './EnemyType';
 import { EnemyPath } from './Pathfinder';
-import { createSoldierPose, SoldierRig } from './SoldierRig';
+import { createSoldierPose, SoldierRig, type SoldierPose } from './SoldierRig';
 import type { SoldierRenderer } from './SoldierRenderer';
 
 /** Every state either enemy type can be in. Shown in the F4 debug labels. */
@@ -163,6 +163,11 @@ export abstract class Enemy implements Damageable {
     return this.center.set(this.currFeet.x, this.currFeet.y + (this.pose.crouch > 0.5 ? 0.6 : 0.9), this.currFeet.z);
   }
 
+  /** The animation pose it is drawn with (sent to multiplayer clients). */
+  get soldierPose(): Readonly<SoldierPose> {
+    return this.pose;
+  }
+
   /** The wall this enemy plans to breach, or 0 for none. */
   get breachWallId(): number {
     return this.hasPath ? this.path.breachWallId : 0;
@@ -192,6 +197,37 @@ export abstract class Enemy implements Damageable {
 
   /** Bring a pooled enemy into play at `at`, facing `yaw`. */
   spawn(at: Vector3, yaw: number): void {
+    this.enter(at, yaw);
+    this.ctx.requestPath(this);
+  }
+
+  /**
+   * Multiplayer client: show this pooled soldier as one of the host's, with hitboxes for the player's shots
+   * but no AI. `replicaUpdate` then moves and poses it from the host's snapshots.
+   */
+  replicaSpawn(at: Vector3, yaw: number): void {
+    this.enter(at, yaw);
+  }
+
+  /** Multiplayer client: the host's latest word on this soldier. `pose` is copied. */
+  replicaUpdate(feet: Vector3, yaw: number, pose: Readonly<SoldierPose>, hp: number): void {
+    this.prevFeet.copy(feet);
+    this.currFeet.copy(feet);
+    this.body.setNextKinematicTranslation(feet);
+    this.yaw = yaw;
+    Object.assign(this.pose, pose);
+    if (this.isAlive) this.hp = hp;
+  }
+
+  /** Multiplayer client: the host says it died. It stops taking hits; the host's snapshots keep posing the body. */
+  replicaDie(): void {
+    if (!this.isAlive) return;
+    this.hp = 0;
+    this.state = 'dead';
+    this.leaveField();
+  }
+
+  private enter(at: Vector3, yaw: number): void {
     this.hp = this.maxHp;
     this.state = 'advance';
     this.quietDeath = false;
@@ -225,7 +261,6 @@ export abstract class Enemy implements Damageable {
     this.ctx.registry.addHitbox(this.headBox, this, 'head');
     this.ctx.registry.addHitbox(this.bodyBox, this, 'body');
     this.onSpawn();
-    this.ctx.requestPath(this);
   }
 
   /** Back to the pool. The manager hides its parts. */
@@ -439,9 +474,14 @@ export abstract class Enemy implements Damageable {
     }
     this.pose.fallX = fx;
     this.pose.fallZ = fz;
+    this.leaveField();
+    this.onDeath();
+  }
+
+  /** Dead: nothing touches or hits the body any more. */
+  private leaveField(): void {
     for (const collider of [this.capsule, this.headBox, this.bodyBox]) collider.setEnabled(false);
     this.ctx.registry.remove(this, [this.headBox, this.bodyBox]);
-    this.onDeath();
   }
 
   /** Where to steer this step, or null to stand. Advances path waypoints and sets `arrived`. */
@@ -494,10 +534,14 @@ export abstract class Enemy implements Damageable {
     const step = Math.floor(this.pose.phase / Math.PI);
     if (step !== this.stepIndex) {
       this.stepIndex = step;
-      const player = this.ctx.player.position;
-      const dx = player.x - this.currFeet.x;
-      const dz = player.z - this.currFeet.z;
-      if (dx * dx + dz * dz < e.footstepRange * e.footstepRange) this.ctx.events.emit('enemyFootstep', { position: this.currFeet });
+      const range2 = e.footstepRange * e.footstepRange;
+      for (const player of this.ctx.players) {
+        const dx = player.position.x - this.currFeet.x;
+        const dz = player.position.z - this.currFeet.z;
+        if (dx * dx + dz * dz >= range2) continue;
+        this.ctx.events.emit('enemyFootstep', { position: this.currFeet });
+        break;
+      }
     }
   }
 

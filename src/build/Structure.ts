@@ -43,6 +43,8 @@ export abstract class Structure implements Damageable {
   abstract readonly size: Vector3;
   /** False for structures nothing can damage (the weapon crate): they never join the damageable registry. */
   readonly damageable: boolean = true;
+  /** Which player built it (see net/PlayerId.ts). Removing it refunds them. */
+  owner = '';
 
   constructor(
     readonly id: number,

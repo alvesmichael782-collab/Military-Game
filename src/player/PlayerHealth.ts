@@ -36,6 +36,13 @@ export class PlayerHealth implements Damageable {
     this.announce();
   }
 
+  /** Multiplayer: back on their feet at full health after being down (at the next build phase). */
+  revive(): void {
+    if (!this.isDead) return;
+    this._health = config.playerHealth.maxHealth;
+    this.announce();
+  }
+
   /** Emit the current health, e.g. so a freshly built HUD can draw it. */
   announce(): void {
     this.events.emit('healthChanged', { health: this._health, maxHealth: config.playerHealth.maxHealth });
