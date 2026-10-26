@@ -2,8 +2,11 @@ import { createBrushSmear } from './BrushSmear';
 import { setFixedDigits } from './digits';
 import './SummaryPanel.css';
 
-/** One line of the stats list: a label and a HUD-made value string (digits, "$", ",", "/"). */
-export type SummaryRow = readonly [label: string, value: string];
+/**
+ * One line of the stats list: a label and a HUD-made value string (digits, "$", ",", "/"). A `minor` line is a
+ * smaller, indented breakdown of the line above it.
+ */
+export type SummaryRow = readonly [label: string, value: string, minor?: boolean];
 
 /**
  * A centered block of HUD text, for the wave summary and the win and lose screens: a big title over a red
@@ -46,9 +49,9 @@ export class SummaryPanel {
   show(title: string, rows: readonly SummaryRow[], footer: string): void {
     this.title.textContent = title;
     this.stats.replaceChildren(
-      ...rows.map(([label, value], i) => {
+      ...rows.map(([label, value, minor], i) => {
         const row = document.createElement('div');
-        row.className = 'hud-summary__row';
+        row.className = minor ? 'hud-summary__row hud-summary__row--minor' : 'hud-summary__row';
         row.style.setProperty('--row', String(i));
         const dt = document.createElement('dt');
         dt.textContent = label;

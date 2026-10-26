@@ -65,6 +65,14 @@
   opacity: 0.85;
 }
 
+/* A breakdown of the line above (kills by enemy type): smaller, indented and pulled up under it. */
+.hud-summary__row--minor {
+  font-size: calc(16 * var(--rp));
+  padding-left: calc(18 * var(--rp));
+  margin-top: calc(-5 * var(--rp));
+  opacity: 0.8;
+}
+
 /* Soft shade under the stats so they read over bright sand. No edges: it fades out like a shadow. */
 .hud-summary__stats {
   position: relative;

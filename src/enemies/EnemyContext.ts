@@ -3,9 +3,11 @@ import type { Vector3 } from 'three';
 import type { Structure } from '../build/Structure';
 import type { Damageable } from '../combat/Damageable';
 import type { DamageableRegistry } from '../combat/DamageableRegistry';
+import type { Grenades } from '../combat/Grenades';
 import type { EventBus, GameEvents } from '../core/EventBus';
 import type { BuildGrid } from '../world/BuildGrid';
 import type { Enemy } from './Enemy';
+import type { MortarShells } from './MortarShells';
 import type { Satchels } from './Satchels';
 import type { SightBudget } from './SightBudget';
 
@@ -37,8 +39,13 @@ export interface EnemyContext {
   readonly core: CoreTarget;
   readonly sight: SightBudget;
   readonly satchels: Satchels;
+  /** The shared grenade pool (grenadiers throw from it with source 'enemy'). */
+  readonly grenades: Grenades;
+  readonly mortarShells: MortarShells;
   /** The live structure with this id, if any (breach targets). */
   wall(id: number): Structure | undefined;
+  /** Every live player-built structure (mortar targets). */
+  structures(): Iterable<Structure>;
   /** Queue a path search for this enemy (deduplicated). */
   requestPath(enemy: Enemy): void;
   /** Seconds of (unfrozen) play since the manager started, for timestamps. */

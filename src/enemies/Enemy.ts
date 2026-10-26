@@ -11,7 +11,7 @@ import { EnemyPath } from './Pathfinder';
 import { createSoldierPose, SoldierRig, type SoldierPose } from './SoldierRig';
 import type { SoldierRenderer } from './SoldierRenderer';
 
-/** Every state either enemy type can be in. Shown in the F4 debug labels. */
+/** Every state any enemy type can be in. Shown in the F4 debug labels. */
 export type EnemyState =
   | 'inactive'
   | 'advance'
@@ -23,6 +23,12 @@ export type EnemyState =
   | 'retreat'
   | 'wait'
   | 'loiter'
+  /** Grenadier: winding up and throwing a grenade. */
+  | 'throw'
+  /** Mortar team: putting the mortar down, shelling, and fighting off a player who came close. */
+  | 'setup'
+  | 'shell'
+  | 'defend'
   | 'dead';
 
 /** How the body moves: not at all, along its path, or straight to `movePoint`. */

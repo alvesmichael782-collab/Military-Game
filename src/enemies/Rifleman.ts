@@ -1,12 +1,11 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { MathUtils, Vector3 } from 'three';
 import type { Structure } from '../build/Structure';
-import { applyDamage } from '../combat/Damage';
 import { Groups } from '../core/CollisionGroups';
 import { config } from '../core/config';
-import type { ImpactSurface } from '../core/EventBus';
 import { Enemy } from './Enemy';
 import type { EnemyContext, PlayerTarget } from './EnemyContext';
+import { fireEnemyRound, spreadDirection } from './EnemyGunfire';
 
 /** A place to fight from. */
 interface CoverSpot {
@@ -62,7 +61,6 @@ const FIRE_CONE = 0.25;
 const RAISE_RATE = 5;
 
 const IDENTITY_ROTATION = { x: 0, y: 0, z: 0, w: 1 };
-const deg = MathUtils.degToRad;
 
 /**
  * Rifleman: advances along its path toward the core. Checks every 0.2 s whether it can see the player's
@@ -72,13 +70,16 @@ const deg = MathUtils.degToRad;
  * shrug off bullets, the sappers do the breaching) or, with a clear line to it, the core.
  */
 export class Rifleman extends Enemy {
-  readonly type = 'rifleman';
+  readonly type: 'rifleman' | 'grenadier' = 'rifleman';
   readonly maxHp: number = config.rifleman.hp;
+  /** Advance speed, in m/s, and the rifle spread's multiplier. Subclasses (the grenadier) set their own. */
+  protected readonly speed: number = config.rifleman.speed;
+  protected readonly spreadMultiplier: number = 1;
 
   /** The player this rifleman watches and shoots at: the one it saw last, or else the nearest one alive. */
-  private target: PlayerTarget;
-  private seesPlayer = false;
-  private lastSeen = -Infinity;
+  protected target: PlayerTarget;
+  protected seesPlayer = false;
+  protected lastSeen = -Infinity;
   private perceptionTimer = 0;
   private targetCheckTimer = 0;
   private reaction = 0;
@@ -86,24 +87,19 @@ export class Rifleman extends Enemy {
   private burstLeft = 0;
   private shotTimer = 0;
   private pauseTimer = 0;
-  private fireTarget: FireTarget = null;
+  protected fireTarget: FireTarget = null;
   private coverDeadline = 0;
   /** The lean that goes with the chosen cover spot. */
   private coverLeanX = 0;
   private coverLeanZ = 0;
   private readonly aimPoint = new Vector3();
   private readonly coverPoint = new Vector3();
-  private readonly eyePos = new Vector3();
+  protected readonly eyePos = new Vector3();
   private readonly headPos = new Vector3();
   private readonly tmp = new Vector3();
   private readonly tmp2 = new Vector3();
   private readonly direction = new Vector3();
-  private readonly right = new Vector3();
-  private readonly up = new Vector3();
   private readonly muzzle = new Vector3();
-  private readonly end = new Vector3();
-  private readonly normal = new Vector3();
-  private readonly ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });
   private readonly coverBall: RAPIER.Ball;
   /** A standing body, to check a cover spot is free. */
   private readonly standProbe = new RAPIER.Capsule(config.enemies.height / 2 - config.enemies.radius - 0.05, config.enemies.radius);
@@ -124,7 +120,7 @@ export class Rifleman extends Enemy {
     this.pose.armed = true;
     this.pose.satchel = false;
     this.pose.band = false;
-    this.pose.fullSpeed = config.rifleman.speed;
+    this.pose.fullSpeed = this.speed;
     this.pose.lean = 0.12;
     this.seesPlayer = false;
     this.lastSeen = -Infinity;
@@ -175,7 +171,7 @@ export class Rifleman extends Enemy {
     // Advancing.
     this.state = 'advance';
     this.lookAt(null);
-    this.followPath(r.speed);
+    this.followPath(this.speed);
     if (!this.hasPath) return;
     if (this.targetCheckTimer > 0) return;
     this.targetCheckTimer = TARGET_CHECK_INTERVAL;
@@ -288,7 +284,7 @@ export class Rifleman extends Enemy {
     this.target = best;
   }
 
-  private playerHead(out: Vector3): Vector3 {
+  protected playerHead(out: Vector3): Vector3 {
     const p = this.target;
     const eye = p.crouching ? config.player.crouchEyeHeight : config.player.standEyeHeight;
     return out.set(p.position.x, p.position.y + eye, p.position.z);
@@ -310,7 +306,7 @@ export class Rifleman extends Enemy {
     if (this.findCover(this.coverPoint)) {
       this.state = 'cover';
       this.coverDeadline = this.ctx.now() + COVER_TIMEOUT;
-      this.moveTo(this.coverPoint, config.rifleman.speed);
+      this.moveTo(this.coverPoint, this.speed);
     } else {
       this.enterEngage();
     }
@@ -523,7 +519,6 @@ export class Rifleman extends Enemy {
   /** One hitscan round at the aim point, inside the current spread cone. */
   private fire(): void {
     const r = config.rifleman;
-    const ctx = this.ctx;
     this.eye(this.eyePos);
     const toTarget = this.tmp.copy(this.aimPoint).sub(this.eyePos);
     const distance = toTarget.length();
@@ -537,45 +532,11 @@ export class Rifleman extends Enemy {
       const v = this.target.velocity;
       spread += s.targetMoving * (Math.hypot(v.x, v.z) / config.player.walkSpeed);
     }
-    this.right.crossVectors(forward, this.up.set(0, 1, 0));
-    if (this.right.lengthSq() < 1e-6) this.right.set(1, 0, 0);
-    this.right.normalize();
-    this.up.crossVectors(this.right, forward).normalize();
-    const offset = Math.tan(deg(spread)) * Math.sqrt(Math.random());
-    const angle = Math.random() * Math.PI * 2;
-    this.direction
-      .copy(forward)
-      .addScaledVector(this.right, Math.cos(angle) * offset)
-      .addScaledVector(this.up, Math.sin(angle) * offset)
-      .normalize();
-
-    this.ray.origin = { x: this.eyePos.x, y: this.eyePos.y, z: this.eyePos.z };
-    this.ray.dir = { x: this.direction.x, y: this.direction.y, z: this.direction.z };
-    const hit = ctx.world.castRayAndGetNormal(this.ray, r.range, true, undefined, Groups.enemySight);
+    spreadDirection(forward, spread * this.spreadMultiplier, this.direction);
     this.rig.muzzle(this.muzzle);
     this.pose.recoil = 1;
-
-    if (!hit) {
-      this.end.copy(this.eyePos).addScaledVector(this.direction, r.range);
-      ctx.events.emit('enemyFired', { type: this.type, muzzle: this.muzzle, end: this.end });
-      return;
-    }
-    this.end.copy(this.eyePos).addScaledVector(this.direction, hit.timeOfImpact);
-    ctx.events.emit('enemyFired', { type: this.type, muzzle: this.muzzle, end: this.end });
-
-    const victim = ctx.players.find((p) => p.colliderHandle === hit.collider.handle);
-    if (victim) {
-      // Armor plates absorb it first. The hit comes from the eyes (where the shot was aimed from), for the HUD's
-      // damage direction and the camera jolt; `attacker` lets repeat hits from this rifleman share one indicator.
-      applyDamage(victim.damageable, r.damage, 'ballistic', this.eyePos, { source: 'enemy', attacker: this });
-      return;
-    }
-    const hitbox = ctx.registry.hitboxOf(hit.collider);
-    let surface: ImpactSurface;
-    if (hitbox) surface = hitbox.target.impactSurface ?? 'target';
-    else surface = hit.collider.shapeType() === RAPIER.ShapeType.HalfSpace ? 'dirt' : 'hard';
-    this.normal.set(hit.normal.x, hit.normal.y, hit.normal.z);
-    ctx.events.emit('bulletImpact', { point: this.end, normal: this.normal, surface });
-    if (hitbox) applyDamage(hitbox.target, r.damage, 'ballistic', this.end, { source: 'enemy' });
+    // Armor plates absorb it first. The hit comes from the eyes (where the shot was aimed from), for the HUD's
+    // damage direction and the camera jolt; repeat hits from this rifleman share one indicator.
+    fireEnemyRound(this.ctx, this, this.eyePos, this.direction, r.range, r.damage, this.muzzle);
   }
 }

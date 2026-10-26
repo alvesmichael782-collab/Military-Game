@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three';
-import type { EventBus, GameEvents } from '../core/EventBus';
+import type { EventBus, ExplosionKind, GameEvents } from '../core/EventBus';
 import { localPlayerId } from '../net/PlayerId';
 import type { Damageable } from './Damageable';
 import type { DamageType } from './DamageType';
@@ -21,6 +21,8 @@ export interface DamageInfo {
   attacker?: object;
   /** Which player dealt it (see net/PlayerId.ts), for source 'player'. Defaults to the player on this machine. */
   player?: string;
+  /** What blew up, for blast damage (grenade, satchel, mortar shell). */
+  blast?: ExplosionKind;
 }
 
 /**
@@ -71,6 +73,7 @@ export function applyDamage(
     killed,
     player,
     routed: routed !== null,
+    blast: info.blast ?? null,
   });
   return killed;
 }

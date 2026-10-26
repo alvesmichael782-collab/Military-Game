@@ -22,6 +22,14 @@ export class EnemyPath {
   breachIndex = -1;
   /** True if the route ends next to the core; false if the search gave up and it only gets closer. */
   reachesCore = false;
+  /**
+   * Plan to this point instead of the core (`setGoal`; mortar teams). Kept across searches until `clearGoal`.
+   * With a goal, `reachesGoal` says whether the route ends in its cell.
+   */
+  hasGoal = false;
+  goalX = 0;
+  goalZ = 0;
+  reachesGoal = false;
   /** Grid cells the raw route passes through (cell index = j * columns + i), for deciding who re-plans after a wall change. */
   readonly cells: number[] = [];
 
@@ -36,6 +44,17 @@ export class EnemyPath {
     this.breachWallId = 0;
     this.breachIndex = -1;
     this.reachesCore = false;
+    this.reachesGoal = false;
+  }
+
+  setGoal(x: number, z: number): void {
+    this.hasGoal = true;
+    this.goalX = x;
+    this.goalZ = z;
+  }
+
+  clearGoal(): void {
+    this.hasGoal = false;
   }
 }
 
@@ -72,12 +91,16 @@ export class Pathfinder {
   private readonly coreX = config.map.corePosition.x;
   private readonly coreZ = config.map.corePosition.z;
   private readonly mid = new Vector3();
-  /** Heuristic per cell (distance to the goal zone), fixed because the core never moves. */
+  /** Heuristic per cell (distance to the core's goal zone), fixed because the core never moves. */
   private readonly h: Float32Array;
   /** Per side step of the cell being expanded: 1 if it is open ground (no wall), else 0. */
   private readonly sideOpen = new Uint8Array(4);
   /** 1 for the cells under the core. */
   private readonly coreCell: Uint8Array;
+  /** The goal cell of the current search when it plans to a point (see `EnemyPath.setGoal`), else -1. */
+  private goalCell = -1;
+  private goalCX = 0;
+  private goalCZ = 0;
 
   /** `coreCells` are the grid cells under the core's footprint. */
   constructor(
@@ -106,11 +129,23 @@ export class Pathfinder {
     }
   }
 
-  /** Plan a route from world point (x, z) to the core into `out`. Returns false if no step at all could be taken. */
+  /**
+   * Plan a route from world point (x, z) to the core into `out`, or to its goal point if it has one. Returns false if
+   * no step at all could be taken.
+   */
   findPath(x: number, z: number, out: EnemyPath): boolean {
     out.clear();
     const grid = this.grid;
     const columns = grid.columns;
+    this.goalCell = -1;
+    if (out.hasGoal) {
+      grid.cellAt(out.goalX, out.goalZ, this.cell);
+      const gi = Math.min(columns - 1, Math.max(0, this.cell.i));
+      const gj = Math.min(grid.rows - 1, Math.max(0, this.cell.j));
+      this.goalCell = gj * columns + gi;
+      this.goalCX = grid.centerX(gi);
+      this.goalCZ = grid.centerZ(gj);
+    }
     if (!grid.cellAt(x, z, this.cell)) {
       // Off the grid: clamp onto it.
       this.cell.i = Math.min(columns - 1, Math.max(0, this.cell.i));
@@ -129,11 +164,10 @@ export class Pathfinder {
     this.g[start] = 0;
     this.parent[start] = -1;
     this.seen[start] = id;
-    const hs = this.h;
-    this.push(start, hs[start]);
+    this.push(start, this.hAt(start));
 
     let best = start;
-    let bestH = hs[start];
+    let bestH = this.hAt(start);
     let goal = -1;
     let visited = 0;
     const maxVisited = config.pathfinding.maxVisited;
@@ -146,12 +180,17 @@ export class Pathfinder {
       const current = this.pop();
       if (this.closed[current] === id) continue;
       // Every route still open costs at least as much as going through the wall: that is the best there is.
-      if (this.g[current] + hs[current] >= throughCost) break;
+      const h = this.hAt(current);
+      if (this.g[current] + h >= throughCost) break;
       this.closed[current] = id;
       const ci = current % columns;
       const cj = (current - ci) / columns;
-      const h = hs[current];
-      if (h <= 0 && grid.isWalkable(ci, cj)) {
+      if (this.goalCell >= 0) {
+        if (current === this.goalCell) {
+          goal = current;
+          break;
+        }
+      } else if (h <= 0 && grid.isWalkable(ci, cj)) {
         // Next to the core with nothing in between: arrived. With a wall in between (a tight ring inside the
         // goal zone), the route must go through it, at the usual wall-crossing cost.
         let open = false;
@@ -223,7 +262,8 @@ export class Pathfinder {
       return true;
     }
     const end = goal >= 0 ? goal : best;
-    out.reachesCore = goal >= 0;
+    if (this.goalCell >= 0) out.reachesGoal = goal >= 0;
+    else out.reachesCore = goal >= 0;
     if (end === start && goal < 0) return false;
     this.buildRoute(start, end, out);
     return true;
@@ -247,7 +287,15 @@ export class Pathfinder {
     this.seen[next] = id;
     this.g[next] = g;
     this.parent[next] = current;
-    this.push(next, g + this.h[next]);
+    this.push(next, g + this.hAt(next));
+  }
+
+  /** Heuristic for `cell`: distance to the core's goal zone, or to the goal point's cell when the search has one. */
+  private hAt(cell: number): number {
+    if (this.goalCell < 0) return this.h[cell];
+    const columns = this.grid.columns;
+    const i = cell % columns;
+    return Math.hypot(this.grid.centerX(i) - this.goalCX, this.grid.centerZ((cell - i) / columns) - this.goalCZ);
   }
 
   /** Walk the parents back, find the breach, then smooth the route into waypoints. */

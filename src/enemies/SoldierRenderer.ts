@@ -13,6 +13,12 @@ const PARTS = {
   rifle: 1,
   satchel: 1,
   band: 1,
+  bandolier: 1,
+  pouches: 1,
+  handGrenade: 1,
+  mortarPack: 1,
+  mortar: 1,
+  pistol: 1,
 } as const satisfies Record<keyof SoldierGeometries, number>;
 
 export type SoldierPart = keyof typeof PARTS;

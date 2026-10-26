@@ -103,10 +103,10 @@ export class Grenade {
     return this.currPosition;
   }
 
-  launch(position: Vector3, velocity: Vector3, source: DamageSource): void {
+  launch(position: Vector3, velocity: Vector3, source: DamageSource, fuse: number = config.grenade.fuse): void {
     this._active = true;
     this.source = source;
-    this.fuse = config.grenade.fuse;
+    this.fuse = fuse;
     this.body.setEnabled(true);
     this.body.setTranslation(position, true);
     this.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);

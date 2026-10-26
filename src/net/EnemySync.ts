@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { EnemyManager } from '../enemies/EnemyManager';
+import { ENEMY_TYPES, type EnemyType } from '../enemies/EnemyType';
 import { UNIFORM_COLORS } from '../enemies/SoldierGeometry';
 import { createSoldierPose } from '../enemies/SoldierRig';
 import { round2, round3 } from './protocol';
@@ -29,13 +30,30 @@ const FALL_X = 19;
 const FALL_Z = 20;
 const SINK = 21;
 const FLAGS = 22;
-export const ENEMY_STRIDE = 23;
+/** The soldier's enemy type, as an index into `ENEMY_TYPES`. */
+const TYPE = 23;
+const THROWING = 24;
+const REACH = 25;
+export const ENEMY_STRIDE = 26;
 
+// Kit flags: what the soldier carries and shows.
 const ARMED = 1;
 const SATCHEL = 2;
 const BAND = 4;
-/** Blended between snapshots; the rest (slot, uniform, alive, flags) come from the newer one. */
-const BLENDED = [HP, X, Y, Z, SPEED, PHASE, AIM, AIM_PITCH, CROUCH, LEAN, ROLL, RECOIL, FLINCH, FALL, FALL_X, FALL_Z, SINK];
+const BANDOLIER = 8;
+const GRENADE = 16;
+const MORTAR_PACK = 32;
+const MORTAR_SET = 64;
+const PISTOL = 128;
+/** Blended between snapshots; the rest (slot, uniform, alive, flags, type) come from the newer one. */
+const BLENDED = [HP, X, Y, Z, SPEED, PHASE, AIM, AIM_PITCH, CROUCH, LEAN, ROLL, RECOIL, FLINCH, FALL, FALL_X, FALL_Z, SINK, THROWING, REACH];
+/** Running speed by type, for the walk cycle's swing. */
+const FULL_SPEED: Record<EnemyType, number> = {
+  rifleman: config.rifleman.speed,
+  sapper: config.sapper.speed,
+  grenadier: config.grenadier.speed,
+  mortar: config.mortar.speed,
+};
 const UNIFORMS = [UNIFORM_COLORS.tan, UNIFORM_COLORS.olive, UNIFORM_COLORS.sapper];
 /** Snapshots kept for blending. */
 const HISTORY = 6;
@@ -58,12 +76,15 @@ export function packEnemies(enemies: EnemyManager): number[] {
     const p = enemy.soldierPose;
     const f = enemy.currFeet;
     const uniform = Math.max(0, UNIFORMS.indexOf(enemies.uniformOf(enemy.slot) as (typeof UNIFORMS)[number]));
-    const flags = (p.armed ? ARMED : 0) | (p.satchel ? SATCHEL : 0) | (p.band ? BAND : 0);
+    const flags =
+      (p.armed ? ARMED : 0) | (p.satchel ? SATCHEL : 0) | (p.band ? BAND : 0) | (p.bandolier ? BANDOLIER : 0) | (p.grenade ? GRENADE : 0) |
+      (p.mortarPack ? MORTAR_PACK : 0) | (p.mortarSet ? MORTAR_SET : 0) | (p.pistol ? PISTOL : 0);
     out.push(
       enemy.slot, uniform, enemy.isAlive ? 1 : 0, Math.ceil(enemy.hp),
       round2(f.x), round2(f.y), round2(f.z), round3(enemy.yaw),
       round2(p.speed), round2(p.phase), round2(p.aim), round3(p.aimPitch), round2(p.crouch), round2(p.lean), round3(p.roll),
       round2(p.recoil), round2(p.flinch), p.flinchSide, round2(p.fall), round2(p.fallX), round2(p.fallZ), round2(p.sink), flags,
+      ENEMY_TYPES.indexOf(enemy.type), round2(p.throwing), round2(p.reach),
     );
   }
   return out;
@@ -117,6 +138,8 @@ export class EnemyReplica {
       for (let i = 0; i < ENEMY_STRIDE; i++) out[i] = b[i];
       for (const i of BLENDED) out[i] = a[i] + (b[i] - a[i]) * t;
       out[YAW] = a[YAW] + wrapAngle(b[YAW] - a[YAW]) * t;
+      // A throw ends by jumping back to 0: blending that would replay the wind-up backwards.
+      if (b[THROWING] < a[THROWING]) out[THROWING] = b[THROWING];
       this.apply(slot, out);
     }
     // The host has sent these back to the pool (or never had them).
@@ -126,7 +149,9 @@ export class EnemyReplica {
   private apply(slot: number, s: readonly number[]): void {
     this.feet.set(s[X], s[Y], s[Z]);
     let enemy = this.enemies.bySlot(slot);
-    if (!enemy) return;
+    const type = ENEMY_TYPES[s[TYPE]];
+    // Pools are laid out the same on every machine, so a slot always holds the same type; anything else is stale.
+    if (!enemy || !type || enemy.type !== type) return;
     if (!enemy.active) enemy = this.enemies.replicaSpawn(slot, this.feet, s[YAW], UNIFORMS[s[UNIFORM]] ?? UNIFORM_COLORS.tan);
     if (!enemy) return;
     if (s[ALIVE] === 0) enemy.replicaDie();
@@ -135,7 +160,14 @@ export class EnemyReplica {
     p.armed = (flags & ARMED) !== 0;
     p.satchel = (flags & SATCHEL) !== 0;
     p.band = (flags & BAND) !== 0;
-    p.fullSpeed = p.armed ? config.rifleman.speed : config.sapper.speed;
+    p.bandolier = (flags & BANDOLIER) !== 0;
+    p.grenade = (flags & GRENADE) !== 0;
+    p.mortarPack = (flags & MORTAR_PACK) !== 0;
+    p.mortarSet = (flags & MORTAR_SET) !== 0;
+    p.pistol = (flags & PISTOL) !== 0;
+    p.throwing = s[THROWING];
+    p.reach = s[REACH];
+    p.fullSpeed = FULL_SPEED[type];
     p.speed = s[SPEED];
     p.phase = s[PHASE];
     p.aim = s[AIM];

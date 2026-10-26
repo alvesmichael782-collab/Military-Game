@@ -56,6 +56,17 @@ const SLING = 0x4a432c;
 const CANVAS = 0x76663f;
 const STRAP = 0xa48d5e;
 const RED = 0xd41e12;
+// Grenadier and mortar kit.
+const BANDOLIER = 0xd6b676;
+const BANDOLIER_DARK = 0x9c8350;
+const FRAG = 0x47562a;
+const FRAG_CAP = 0x8a8d80;
+const TUBE = 0x3b4130;
+const TUBE_DARK = 0x2a2e22;
+const PLATE = 0x45463f;
+const CRATE = 0x6a5232;
+const CRATE_DARK = 0x4a3820;
+const SHELL = 0x56603c;
 
 /** Joint layout shared by the rig and the geometry, in meters. Feet at y = 0, front is +Z, the soldier's right is -X. */
 export const SOLDIER = {
@@ -76,6 +87,11 @@ export const SOLDIER = {
   rifleGrip: new Vector3(0, -0.06, 0),
   rifleHandguard: new Vector3(0, -0.02, 0.24),
   rifleMuzzle: new Vector3(0, 0.03, 0.66),
+  /** The pistol's muzzle, and a grenade held in the right hand, in the right forearm's frame (the hand points along -Y). */
+  pistolMuzzle: new Vector3(0, -0.43, 0.05),
+  handGrenade: new Vector3(0, -0.32, 0.045),
+  /** The set-up mortar's muzzle, in the ground frame under the kneeling soldier (front is +Z). */
+  mortarMuzzle: new Vector3(0, 0.66, 1.2),
 } as const;
 
 const tmpColor = new Color();
@@ -164,6 +180,14 @@ export interface SoldierGeometries {
   /** Sapper extras: the satchel charge on the chest (torso frame) and the red helmet band (head frame). */
   satchel: BufferGeometry;
   band: BufferGeometry;
+  /** Grenadier extras: the crossed bandoliers of frags on the chest (torso frame), the grenade pouches on the belt (pelvis frame), and a frag in the right hand (forearm frame). */
+  bandolier: BufferGeometry;
+  pouches: BufferGeometry;
+  handGrenade: BufferGeometry;
+  /** Mortar team extras: the mortar carried on the back (torso frame), the mortar set up with its ammo crate (ground frame), and the pistol (right forearm frame). */
+  mortarPack: BufferGeometry;
+  mortar: BufferGeometry;
+  pistol: BufferGeometry;
 }
 
 /** A helmet shell: the top of a sphere, stretched front to back, sitting on `y`. */
@@ -307,7 +331,82 @@ export function createSoldierGeometries(): SoldierGeometries {
     box(0.012, 0.015, 0.26, SLING, { y: -0.12, z: -0.22, rx: 0.18 }),
   ], -0.2, 0.06, 0.85);
 
-  return { pelvis, torso, head, upperArm, forearm, thigh, shin, rifle, satchel, band };
+  // Two wide tan bandoliers crossed over the chest and back, with frags clipped high on the chest where the rifle
+  // never covers them: a bright X and a row of bumps that read from far off.
+  const bandolier = part([
+    ...[1, -1].flatMap((side) => [
+      box(0.095, 0.6, 0.024, BANDOLIER, { y: 0.25, z: 0.165 + (side > 0 ? 0.004 : 0), rz: 0.62 * side }),
+      box(0.095, 0.6, 0.024, BANDOLIER, { y: 0.25, z: -0.236, rz: -0.62 * side }),
+      box(0.08, 0.03, 0.42, BANDOLIER, { x: -0.13 * side, y: 0.478 }),
+      box(0.084, 0.012, 0.026, BANDOLIER_DARK, { y: 0.25, z: 0.179 + (side > 0 ? 0.004 : 0), rz: 0.62 * side }),
+      ...[0.13, 0.31].flatMap((t) => frag(side * (-0.17 + 0.34 * t), 0.45 - 0.42 * t, 0.205)),
+    ]),
+  ], -0.02, 0.45, 0.82);
+
+  // Two tan grenade pouches either side of the buckle, each with a frag's cap showing over the flap.
+  const pouches = part([
+    ...[-0.075, 0.075].flatMap((x) => [
+      box(0.075, 0.085, 0.06, BANDOLIER, { x, y: 0.02, z: 0.142 }),
+      box(0.08, 0.025, 0.065, BANDOLIER_DARK, { x, y: 0.068, z: 0.142 }),
+      tube(0.022, 0.022, 0.035, 6, FRAG_CAP, { x, y: 0.095, z: 0.142 }),
+    ]),
+    box(0.075, 0.085, 0.06, BANDOLIER, { x: 0.16, y: 0.02, z: -0.06, ry: Math.PI / 2 }),
+    box(0.075, 0.085, 0.06, BANDOLIER, { x: -0.16, y: 0.02, z: -0.06, ry: Math.PI / 2 }),
+  ], -0.03, 0.1, 0.8);
+
+  // A frag in the right hand, a little bigger than life so the wind-up reads.
+  const handGrenade = part(frag(0, SOLDIER.handGrenade.y, SOLDIER.handGrenade.z, 1.25), -0.36, -0.28, 0.85);
+
+  // The mortar on the back for the march: the tube across the pack, its folded bipod beside it and the round
+  // baseplate strapped flat over the pack.
+  const mortarPack = part([
+    tube(0.048, 0.048, 0.78, 8, TUBE, { x: 0.02, y: 0.3, z: -0.27, rz: -0.42 }),
+    tube(0.056, 0.056, 0.05, 8, TUBE_DARK, { x: -0.13, y: 0.65, z: -0.27, rz: -0.42 }),
+    box(0.02, 0.5, 0.02, TUBE_DARK, { x: 0.09, y: 0.27, z: -0.31, rz: -0.36 }),
+    box(0.02, 0.5, 0.02, TUBE_DARK, { x: 0.12, y: 0.26, z: -0.3, rz: -0.32 }),
+    tube(0.17, 0.17, 0.03, 8, PLATE, { y: 0.22, z: -0.235, rx: Math.PI / 2 }),
+    box(0.3, 0.04, 0.025, WEB_DARK, { y: 0.3, z: -0.25 }),
+  ], -0.05, 0.55, 0.78);
+
+  // The mortar set up in front of the kneeling soldier: baseplate, tube at about 45 degrees, bipod legs and the
+  // traversing screw, and an open ammo crate at its side with two rounds on top.
+  const mortarSet = part([
+    tube(0.21, 0.23, 0.05, 8, PLATE, { y: 0.025, z: 0.62 }),
+    box(0.1, 0.06, 0.1, TUBE_DARK, { y: 0.07, z: 0.62 }),
+    tube(0.052, 0.052, 0.8, 8, TUBE, { y: 0.08 + 0.4 * Math.SQRT1_2, z: 0.62 + 0.4 * Math.SQRT1_2, rx: Math.PI / 4 }),
+    tube(0.062, 0.062, 0.06, 8, TUBE_DARK, { y: 0.08 + 0.78 * Math.SQRT1_2, z: 0.62 + 0.78 * Math.SQRT1_2, rx: Math.PI / 4 }),
+    box(0.025, 0.56, 0.025, TUBE_DARK, { x: 0.13, y: 0.24, z: 1.06, rz: 0.42, rx: -0.12 }),
+    box(0.025, 0.56, 0.025, TUBE_DARK, { x: -0.13, y: 0.24, z: 1.06, rz: -0.42, rx: -0.12 }),
+    box(0.3, 0.025, 0.03, TUBE_DARK, { y: 0.32, z: 1.04 }),
+    box(0.05, 0.03, 0.05, TUBE_DARK, { x: 0.25, y: 0.015, z: 1.08 }),
+    box(0.05, 0.03, 0.05, TUBE_DARK, { x: -0.25, y: 0.015, z: 1.08 }),
+    box(0.38, 0.2, 0.26, CRATE, { x: 0.55, y: 0.1, z: 0.3, ry: 0.25 }),
+    box(0.4, 0.03, 0.04, CRATE_DARK, { x: 0.55, y: 0.17, z: 0.3, ry: 0.25 }),
+    box(0.06, 0.03, 0.27, CRATE_DARK, { x: 0.55, y: 0.205, z: 0.3, ry: 0.25 }),
+    tube(0.04, 0.04, 0.3, 6, SHELL, { x: 0.5, y: 0.245, z: 0.25, ry: 0.25, rz: Math.PI / 2 }),
+    tube(0.04, 0.04, 0.3, 6, SHELL, { x: 0.58, y: 0.245, z: 0.35, ry: 0.25, rz: Math.PI / 2 }),
+  ], 0.0, 0.5, 0.75);
+
+  // A dark service pistol in the right hand: slide along the pointing direction, the grip below the wrist.
+  const pistol = part([
+    box(0.032, 0.19, 0.04, METAL, { y: -0.34, z: 0.05 }),
+    box(0.028, 0.04, 0.1, METAL, { y: -0.29, z: 0.0, rx: -0.25 }),
+    box(0.01, 0.03, 0.03, METAL, { y: -0.31, z: 0.015 }),
+  ], -0.44, -0.27, 0.85);
+
+  return {
+    pelvis, torso, head, upperArm, forearm, thigh, shin, rifle, satchel, band,
+    bandolier, pouches, handGrenade, mortarPack, mortar: mortarSet, pistol,
+  };
+}
+
+/** A frag grenade standing at (x, y, z): an olive body and a fuse cap with its spoon. */
+function frag(x: number, y: number, z: number, size = 1): BufferGeometry[] {
+  return [
+    tube(0.03 * size, 0.032 * size, 0.07 * size, 6, FRAG, { x, y, z }),
+    tube(0.016 * size, 0.018 * size, 0.025 * size, 5, FRAG_CAP, { x, y: y + 0.045 * size, z }),
+    box(0.012 * size, 0.05 * size, 0.012 * size, FRAG_CAP, { x: x + 0.025 * size, y: y + 0.02 * size, z }),
+  ];
 }
 
 /** A canteen in its cover, hanging off the belt. */

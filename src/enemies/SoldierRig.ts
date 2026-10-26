@@ -9,6 +9,18 @@ export interface SoldierPose {
   /** A sapper's satchel charge on the chest, and the red helmet band. */
   satchel: boolean;
   band: boolean;
+  /** A grenadier's bandolier and belt pouches, and a frag in its right hand (from the wind-up to the release). */
+  bandolier: boolean;
+  grenade: boolean;
+  /** 0 = not throwing; 0..1 through an overhand wind-up, 1..2 through the release and follow-through. */
+  throwing: number;
+  /** A mortar team's mortar: carried on the back, or set up on the ground in front of it (with its ammo crate). */
+  mortarPack: boolean;
+  mortarSet: boolean;
+  /** Holds a pistol (a mortar team defending itself), raised with `aim`. */
+  pistol: boolean;
+  /** 0..1 arms reaching forward and up to drop a round down the mortar tube. */
+  reach: number;
   /** Horizontal speed now, in m/s, and the speed at which the gait reaches full swing. */
   speed: number;
   fullSpeed: number;
@@ -36,7 +48,8 @@ export interface SoldierPose {
 
 export function createSoldierPose(): SoldierPose {
   return {
-    armed: true, satchel: false, band: false, speed: 0, fullSpeed: 4, phase: 0, aim: 0, aimPitch: 0, crouch: 0,
+    armed: true, satchel: false, band: false, bandolier: false, grenade: false, throwing: 0, mortarPack: false, mortarSet: false,
+    pistol: false, reach: 0, speed: 0, fullSpeed: 4, phase: 0, aim: 0, aimPitch: 0, crouch: 0,
     lean: 0.1, roll: 0, recoil: 0, flinch: 0, flinchSide: 1, fall: 0, fallX: 0, fallZ: 1, sink: 0,
   };
 }
@@ -57,6 +70,16 @@ const DEAD_RIFLE_ROT = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), M
 /** Elbows bend outward and down. */
 const POLE_RIGHT = new Vector3(-1, -1, -0.4).normalize();
 const POLE_LEFT = new Vector3(1, -1.2, -0.2).normalize();
+// Pistol in both hands, in the torso's frame: right hand on the grip, left hand cupping it, low and raised.
+const PISTOL_LOW = new Vector3(-0.08, 0.16, 0.3);
+const PISTOL_AIM = new Vector3(-0.05, 0.43, 0.47);
+const PISTOL_SUPPORT = new Vector3(0.05, -0.02, -0.03);
+// Overhand throw, as the right shoulder's and elbow's pitch: hanging, cocked behind the head, and followed through.
+const THROW_REST_SHOULDER = -0.3;
+const THROW_BACK_SHOULDER = 2.7;
+const THROW_FOLLOW_SHOULDER = -1.0;
+const THROW_BACK_ELBOW = -1.7;
+const THROW_FOLLOW_ELBOW = -0.25;
 
 const tmpA = new Vector3();
 const tmpB = new Vector3();
@@ -69,10 +92,15 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function smooth(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
 /**
  * One soldier's skeleton of plain Object3D joints (never added to the scene) and its procedural animation:
  * walk and run leg and arm swing, the rifle carried at low ready or shouldered (hands kept on it by two-bone
- * arm IK), recoil kick, a flinch when hit, the sapper's crouched planting pose, and toppling over dead.
+ * arm IK), recoil kick, a flinch when hit, the sapper's crouched planting pose (also the mortar team's kneel),
+ * the grenadier's overhand throw, a two-handed pistol, reaching up to load the mortar, and toppling over dead.
  * `write` copies each joint's world matrix into the soldier's slot in the instanced renderer.
  */
 export class SoldierRig {
@@ -85,7 +113,11 @@ export class SoldierRig {
   private readonly legs = [new Object3D(), new Object3D()];
   private readonly knees = [new Object3D(), new Object3D()];
   private readonly rifle = new Object3D();
-  private visible = { armed: true, satchel: false, band: false };
+  /** Feet and facing only (it never topples): where the set-up mortar sits. */
+  private readonly ground = new Object3D();
+  private readonly visible = {
+    armed: true, satchel: false, band: false, bandolier: false, grenade: false, mortarPack: false, mortarSet: false, pistol: false,
+  };
 
   constructor() {
     const s = SOLDIER;
@@ -114,6 +146,21 @@ export class SoldierRig {
     return out.copy(SOLDIER.rifleMuzzle).applyMatrix4(this.rifle.matrixWorld);
   }
 
+  /** World position of the pistol's muzzle, from the last pose. */
+  pistolMuzzle(out: Vector3): Vector3 {
+    return out.copy(SOLDIER.pistolMuzzle).applyMatrix4(this.elbows[0].matrixWorld);
+  }
+
+  /** World position of a grenade in the right hand, from the last pose. */
+  handGrenade(out: Vector3): Vector3 {
+    return out.copy(SOLDIER.handGrenade).applyMatrix4(this.elbows[0].matrixWorld);
+  }
+
+  /** World position of the set-up mortar's muzzle, from the last pose. */
+  mortarMuzzle(out: Vector3): Vector3 {
+    return out.copy(SOLDIER.mortarMuzzle).applyMatrix4(this.ground.matrixWorld);
+  }
+
   /** World position of the head, from the last pose. */
   headPosition(out: Vector3): Vector3 {
     return out.set(0, 0.14, 0).applyMatrix4(this.head.matrixWorld);
@@ -139,9 +186,15 @@ export class SoldierRig {
   /** Pose the skeleton standing at `feet`, facing `yaw` (0 faces +Z). */
   pose(feet: Vector3, yaw: number, p: SoldierPose): void {
     const s = SOLDIER;
-    this.visible.armed = p.armed;
-    this.visible.satchel = p.satchel;
-    this.visible.band = p.band;
+    const v = this.visible;
+    v.armed = p.armed;
+    v.satchel = p.satchel;
+    v.band = p.band;
+    v.bandolier = p.bandolier;
+    v.grenade = p.grenade;
+    v.mortarPack = p.mortarPack;
+    v.mortarSet = p.mortarSet;
+    v.pistol = p.pistol;
     const dead = p.fall > 0;
     const gait = Math.min(1, p.speed / p.fullSpeed);
     const sin = Math.sin(p.phase);
@@ -173,13 +226,24 @@ export class SoldierRig {
     this.hips.position.set(0, lerp(s.hipHeight - bob, 0.62, p.crouch) - p.flinch * 0.04, 0);
     this.hips.rotation.set(0, 0.08 * gait * sin, 0);
 
-    // Upper body: lean into the run, bend over to plant, pitch with the aim, jolt on recoil and hits.
-    const torsoPitch = p.lean * gait + p.crouch * 0.6 - p.aimPitch * p.aim - p.recoil * 0.06 + p.flinch * 0.22;
-    this.torso.rotation.set(torsoPitch, -0.08 * gait * sin - 0.12 * p.aim, p.flinch * 0.2 * p.flinchSide + p.roll);
+    // Upper body: lean into the run, bend over to plant, pitch with the aim, jolt on recoil and hits. A throw twists the
+    // right shoulder back and the chest up for the wind-up, then whips them through.
+    const windup = smooth(Math.min(1, p.throwing));
+    const follow = smooth(Math.max(0, Math.min(1, p.throwing - 1)));
+    const throwTwist = p.throwing > 0 ? lerp(-0.55 * windup, 0.35, follow) : 0;
+    const throwPitch = p.throwing > 0 ? lerp(-0.18 * windup, 0.25, follow) : 0;
+    const torsoPitch = p.lean * gait + p.crouch * 0.6 - p.aimPitch * p.aim - p.recoil * 0.06 + p.flinch * 0.22 + throwPitch - p.reach * 0.25;
+    this.torso.rotation.set(torsoPitch, -0.08 * gait * sin - 0.12 * p.aim + throwTwist, p.flinch * 0.2 * p.flinchSide + p.roll);
     this.head.rotation.set(0.12 * p.aim - p.crouch * 0.3 - torsoPitch * 0.3 + p.flinch * 0.25, 0.12 * p.aim, -p.flinch * 0.15 * p.flinchSide - p.roll * 0.6);
 
-    if (p.armed && !dead) this.poseRifleArms(p);
-    else this.poseFreeArms(p, gait, sin, dead);
+    if (p.armed && !dead) {
+      this.poseRifleArms(p);
+      if (p.throwing > 0) this.poseThrowArm(windup, follow);
+    } else if (p.pistol && !dead) {
+      this.posePistolArms(p);
+    } else {
+      this.poseFreeArms(p, gait, sin, dead);
+    }
     if (p.armed && dead) {
       const t = Math.min(1, p.fall * 2);
       this.rifle.position.lerp(DEAD_RIFLE_POS, t);
@@ -199,6 +263,11 @@ export class SoldierRig {
       this.root.position.copy(feet);
     }
     this.root.updateMatrixWorld(true);
+    if (p.mortarSet) {
+      this.ground.quaternion.copy(yawQ);
+      this.ground.position.set(feet.x, feet.y - p.sink, feet.z);
+      this.ground.updateMatrixWorld(true);
+    }
   }
 
   /** Copy the posed joints into this soldier's slot. */
@@ -218,6 +287,22 @@ export class SoldierRig {
     else renderer.hide('satchel', slot);
     if (this.visible.band) renderer.set('band', slot, 0, this.head.matrixWorld);
     else renderer.hide('band', slot);
+    const v = this.visible;
+    if (v.bandolier) {
+      renderer.set('bandolier', slot, 0, this.torso.matrixWorld);
+      renderer.set('pouches', slot, 0, this.hips.matrixWorld);
+    } else {
+      renderer.hide('bandolier', slot);
+      renderer.hide('pouches', slot);
+    }
+    if (v.grenade) renderer.set('handGrenade', slot, 0, this.elbows[0].matrixWorld);
+    else renderer.hide('handGrenade', slot);
+    if (v.mortarPack) renderer.set('mortarPack', slot, 0, this.torso.matrixWorld);
+    else renderer.hide('mortarPack', slot);
+    if (v.mortarSet) renderer.set('mortar', slot, 0, this.ground.matrixWorld);
+    else renderer.hide('mortar', slot);
+    if (v.pistol) renderer.set('pistol', slot, 0, this.elbows[0].matrixWorld);
+    else renderer.hide('pistol', slot);
   }
 
   /** Rifle at low ready or shouldered, with both hands kept on it by IK. */
@@ -237,7 +322,30 @@ export class SoldierRig {
     this.solveArm(1, guard, POLE_LEFT);
   }
 
-  /** Arms swinging opposite the legs (sappers), reaching down to plant, or flung out when dead. */
+  /**
+   * The right arm (the rifle stays in the left hand) in an overhand throw: `windup` 0..1 raises it and cocks the hand
+   * behind the head, `follow` 0..1 whips it forward and down.
+   */
+  private poseThrowArm(windup: number, follow: number): void {
+    const shoulder = lerp(lerp(THROW_REST_SHOULDER, THROW_BACK_SHOULDER, windup), THROW_FOLLOW_SHOULDER, follow);
+    const elbow = lerp(lerp(-0.4, THROW_BACK_ELBOW, windup), THROW_FOLLOW_ELBOW, follow);
+    this.shoulders[0].quaternion.identity();
+    this.shoulders[0].rotation.set(shoulder, 0, -0.25 * windup * (1 - follow) - 0.1);
+    this.elbows[0].quaternion.identity();
+    this.elbows[0].rotation.set(elbow, 0, 0);
+  }
+
+  /** A pistol held in both hands, low, or raised and aimed with `aim`; both hands kept on it by IK. */
+  private posePistolArms(p: SoldierPose): void {
+    const grip = tmpB.lerpVectors(PISTOL_LOW, PISTOL_AIM, p.aim);
+    grip.z -= 0.05 * p.recoil;
+    grip.y += 0.03 * p.recoil;
+    this.solveArm(0, grip, POLE_RIGHT);
+    const support = tmpC.copy(grip).add(PISTOL_SUPPORT);
+    this.solveArm(1, support, POLE_LEFT);
+  }
+
+  /** Arms swinging opposite the legs (sappers), reaching down to plant (or up to the mortar's tube), or flung out when dead. */
   private poseFreeArms(p: SoldierPose, gait: number, sin: number, dead: boolean): void {
     const swing = lerp(0.35, 1.0, gait) * gait;
     for (let side = 0; side < 2; side++) {
@@ -247,6 +355,9 @@ export class SoldierRig {
       let elbow = -(0.35 + 0.95 * gait);
       x = lerp(x, -1.15 + side * 0.15, p.crouch);
       elbow = lerp(elbow, -0.45, p.crouch);
+      x = lerp(x, -1.75 + side * 0.1, p.reach);
+      z = lerp(z, -out * 0.12, p.reach);
+      elbow = lerp(elbow, -0.7, p.reach);
       if (dead) {
         const t = Math.min(1, p.fall * 1.5);
         x = lerp(x, -0.6 - side * 0.5, t);

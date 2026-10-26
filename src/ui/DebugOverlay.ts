@@ -68,8 +68,8 @@ const HELP =
   'Game controls: Esc pauses; the pause menu lists and rebinds them. Debug keys are fixed:\n' +
   'K: 25 damage   M: earn $50   U: refill ammo and grenades   N: end the wave (in a fight) or next phase   L: force loss\n' +
   'J: 25% damage to the structure under the crosshair\n' +
-  '7: spawn rifleman   8: spawn sapper   9: kill all enemies   0: freeze or unfreeze enemy AI\n' +
-  'F1: debug camera   F3: toggle this overlay   F4: enemy paths, breach targets and states   F6: retro filter on or off   F8: save the playtest log';
+  '5: spawn grenadier   6: spawn mortar team   7: spawn rifleman   8: spawn sapper   9: kill all enemies   0: freeze or unfreeze enemy AI\n' +
+  'F1: debug camera   F3: toggle this overlay   F4: enemy paths, breach targets, grenade arcs, mortar spots and states   F6: retro filter on or off   F8: save the playtest log';
 
 /** Spawn points by where they sit on the map (config.map.spawnPoints), e.g. "N" for the north one. */
 function spawnName(index: number): string {

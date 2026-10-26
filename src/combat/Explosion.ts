@@ -58,8 +58,9 @@ export class Explosions {
       const scale = blastFalloff(distance, radius, fullRadius);
       if (scale > 0) hits.push([target, scale]);
     }
+    const blast = options.kind ?? 'frag';
     for (const [target, scale] of hits) {
-      applyDamage(target, damage * scale, 'explosive', position, { source });
+      applyDamage(target, damage * scale, 'explosive', position, { source, blast });
     }
 
     this.pushBodies(position, radius, fullRadius);
@@ -68,7 +69,7 @@ export class Explosions {
       position,
       radius,
       damage,
-      kind: options.kind ?? 'frag',
+      kind: blast,
       groundPoint: ground ? this.groundPoint : null,
       groundNormal: this.groundNormal,
     });

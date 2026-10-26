@@ -6,12 +6,16 @@ import type { StructureManager } from '../build/StructureManager';
 import { applyDamage } from '../combat/Damage';
 import type { DamageableRegistry } from '../combat/DamageableRegistry';
 import type { Explosions } from '../combat/Explosion';
+import type { Grenades } from '../combat/Grenades';
 import { config } from '../core/config';
 import type { EventBus, GameEvents } from '../core/EventBus';
 import type { BuildGrid, Cell } from '../world/BuildGrid';
 import { createEnemyController, Enemy } from './Enemy';
 import type { CoreTarget, EnemyContext, PlayerTarget } from './EnemyContext';
-import type { EnemyType } from './EnemyType';
+import { ENEMY_TYPES, type EnemyType } from './EnemyType';
+import { Grenadier } from './Grenadier';
+import { MortarShells } from './MortarShells';
+import { MortarTeam } from './MortarTeam';
 import { Pathfinder } from './Pathfinder';
 import { Rifleman } from './Rifleman';
 import { Sapper } from './Sapper';
@@ -25,14 +29,20 @@ const PATH_RETRY = 1;
 /** Enemies spawn within this distance of a spawn point's center, in meters (the pads are 3 m in radius). */
 const SPAWN_SCATTER = 2.5;
 
+/** Enemies of each type that can be on the field at once (alive or lying dead): the pool sizes. */
+function poolSize(type: EnemyType): number {
+  return type === 'mortar' ? config.mortar.poolSize : config.enemies.maxActive;
+}
+
 /**
  * Owns every enemy: a fixed pool per type (nothing is created during play), the soldier renderer, the
- * satchel pool, the path queue (searched within a per-frame budget) and the sight budget. Runs movement in
+ * satchel and mortar shell pools, the path queue (searched within a per-frame budget) and the sight budget. Runs movement in
  * the fixed step and thinking, timers and drawing per frame. Re-plans routes after the walls change
  * (debounced), and turns `damageDealt` on enemies into `enemyDamaged` and `enemyKilled`.
  */
 export class EnemyManager {
   readonly satchels: Satchels;
+  readonly mortarShells: MortarShells;
   private readonly renderer: SoldierRenderer;
   private readonly pools: Record<EnemyType, Enemy[]>;
   private readonly all: Enemy[] = [];
@@ -65,13 +75,14 @@ export class EnemyManager {
     private readonly events: EventBus<GameEvents>,
     structures: StructureManager,
     explosions: Explosions,
+    grenades: Grenades,
     players: readonly PlayerTarget[],
     core: CoreTarget,
     private readonly spawnPoints: readonly Vector3[],
   ) {
-    const capacity = config.enemies.maxActive;
-    this.renderer = new SoldierRenderer(scene, capacity * 2);
+    this.renderer = new SoldierRenderer(scene, ENEMY_TYPES.reduce((n, type) => n + poolSize(type), 0));
     this.satchels = new Satchels(scene, explosions, events);
+    this.mortarShells = new MortarShells(scene, explosions, events);
     this.sight = new SightBudget(world);
     this.controller = createEnemyController(world);
     this.pathfinder = new Pathfinder(grid, (id) => structures.byId(id), this.coreCells(core));
@@ -84,17 +95,29 @@ export class EnemyManager {
       core,
       sight: this.sight,
       satchels: this.satchels,
+      grenades,
+      mortarShells: this.mortarShells,
       wall: (id) => structures.byId(id),
+      structures: () => structures.all(),
       requestPath: (enemy) => this.requestPath(enemy),
       now: () => this.time,
     };
 
-    // Riflemen take renderer slots 0..capacity-1, sappers the next block.
-    this.pools = {
-      rifleman: Array.from({ length: capacity }, (_, i) => new Rifleman(i, this.ctx)),
-      sapper: Array.from({ length: capacity }, (_, i) => new Sapper(capacity + i, this.ctx)),
+    // Each type takes the next block of renderer slots, in `ENEMY_TYPES` order (the same on every machine, so a
+    // slot names one soldier in multiplayer).
+    const create: Record<EnemyType, (slot: number) => Enemy> = {
+      rifleman: (slot) => new Rifleman(slot, this.ctx),
+      sapper: (slot) => new Sapper(slot, this.ctx),
+      grenadier: (slot) => new Grenadier(slot, this.ctx),
+      mortar: (slot) => new MortarTeam(slot, this.ctx),
     };
-    this.all.push(...this.pools.rifleman, ...this.pools.sapper);
+    const pools = {} as Record<EnemyType, Enemy[]>;
+    for (const type of ENEMY_TYPES) {
+      const first = this.all.length;
+      pools[type] = Array.from({ length: poolSize(type) }, (_, i) => create[type](first + i));
+      this.all.push(...pools[type]);
+    }
+    this.pools = pools;
 
     events.on('navChanged', ({ edge, blocked }) => {
       if (!blocked) this.scheduleRepath(null);
@@ -157,6 +180,13 @@ export class EnemyManager {
     return n;
   }
 
+  /** Living enemies of one type. */
+  aliveOf(type: EnemyType): number {
+    let n = 0;
+    for (const enemy of this.pools[type]) if (enemy.isAlive) n++;
+    return n;
+  }
+
   /** Path searches run during the last second. */
   get pathRequestsPerSecond(): number {
     return this._pathRate;
@@ -198,8 +228,10 @@ export class EnemyManager {
     const position = new Vector3(point.x + Math.cos(angle) * r, 0, point.z + Math.sin(angle) * r);
     const core = this.ctx.core.base;
     enemy.spawn(position, Math.atan2(core.x - position.x, core.z - position.z));
-    // Riflemen come in desert tan or olive, picked per soldier; sappers have their own darker kit.
-    const uniform = type === 'sapper' ? UNIFORM_COLORS.sapper : Math.random() < 0.5 ? UNIFORM_COLORS.tan : UNIFORM_COLORS.olive;
+    // Riflemen and mortar teams come in desert tan or olive, picked per soldier. Sappers have their own darker kit, and
+    // grenadiers wear olive so their tan bandoliers stand out.
+    const uniform =
+      type === 'sapper' ? UNIFORM_COLORS.sapper : type === 'grenadier' || Math.random() < 0.5 ? UNIFORM_COLORS.olive : UNIFORM_COLORS.tan;
     this.uniforms[enemy.slot] = uniform;
     this.renderer.setUniform(enemy.slot, uniform);
     // Stagger thinking across the pool.
@@ -268,8 +300,9 @@ export class EnemyManager {
   update(dt: number, alpha: number): void {
     this.sight.beginFrame();
     if (this.replica) {
-      // The host's satchels, mirrored here so they blink, beep and blow up (harmlessly) in sync.
+      // The host's satchels and mortar shells, mirrored here so they beep, whistle and blow up (harmlessly) in sync.
       this.satchels.update(dt);
+      this.mortarShells.update(dt);
     } else if (!this._frozen) {
       this.time += dt;
       this.updateRepath(dt);
@@ -292,6 +325,7 @@ export class EnemyManager {
         }
       }
       this.satchels.update(dt);
+      this.mortarShells.update(dt);
     }
     for (const enemy of this.all) if (enemy.active) enemy.render(alpha, this.renderer);
     this.renderer.flush();

@@ -103,14 +103,28 @@ export const config = {
     costs: {
       rifleman: 2,
       sapper: 5,
+      grenadier: 4,
+      mortar: 8,
     },
     /** First wave each enemy type can appear in. */
     unlockWave: {
       rifleman: 1,
       sapper: 3,
+      grenadier: 4,
+      mortar: 6,
     },
     /** Sappers take at most this fraction of a wave's budget (a random share up to it); riflemen fill the rest. */
     maxSapperShare: 0.25,
+    /** Grenadiers take at most this fraction of a wave's budget (a random share up to it). */
+    maxGrenadierShare: 0.25,
+    /**
+     * Mortar teams take at most this fraction of a wave's budget (at least one team once unlocked, budget allowing).
+     * They come in on their own, not in squads, and never more than `mortar.maxAlive` at once.
+     */
+    maxMortarShare: 0.25,
+    /** Seconds from the start of the fight to the first mortar team, and between teams after that (random in the range). */
+    mortarDelayMin: 8,
+    mortarDelayMax: 16,
     /**
      * Enemies per squad. The range slides up with the waves: wave 1 sends squads of 3-4, the last wave 4-5.
      * A wave's last squad is whatever is left of its budget.
@@ -303,8 +317,8 @@ export const config = {
     friction: 0.8,
     linearDamping: 0.15,
     angularDamping: 1.5,
-    /** Grenades that can be in the air at once (pool size). */
-    maxActive: 6,
+    /** Grenades that can be in the air at once (pool size), the player's, teammates' and grenadiers' together. */
+    maxActive: 14,
     /** Change in velocity, in m/s, that counts as a bounce for the bounce sound. */
     bounceThreshold: 2.5,
   },
@@ -361,6 +375,8 @@ export const config = {
     killRewards: {
       rifleman: 100,
       sapper: 200,
+      grenadier: 150,
+      mortar: 300,
       headshotBonus: 50,
     },
     /** Paid when a wave is cleared: `base` plus `perWave` times the wave number ($325 for wave 3). */
@@ -604,7 +620,7 @@ export const config = {
   enemies: {
     /** Pool size: the most enemies alive (or lying dead) at once. Nothing is created or destroyed during play. */
     maxActive: 40,
-    /** Movement capsule, in meters. Riflemen and sappers share one body size. */
+    /** Movement capsule, in meters. Every enemy type shares one body size. */
     radius: 0.35,
     height: 1.8,
     /** Where enemies look from, in meters above their feet. */
@@ -686,6 +702,107 @@ export const config = {
     retreatDistance: 8,
     /** Charges carried. Out of charges, it keeps advancing toward the core and loiters there. */
     satchels: 3,
+  },
+  /**
+   * Grenadier: a rifleman (same rifle, bursts, cover and perception, see `rifleman`) with a bandolier of frag grenades.
+   * It lobs them at players who hide behind walls. Its grenades are ordinary frags (`grenade.damage`, `grenade.radius`).
+   */
+  grenadier: {
+    hp: 100,
+    speed: 3.4,
+    /** Rifle spread, times the rifleman's. */
+    spreadMultiplier: 1.3,
+    /** Seconds between checks for someone to throw at. */
+    checkInterval: 0.4,
+    /** A player this far away, in meters, can be thrown at, when out of its sight or standing near walls. */
+    throwMinRange: 12,
+    throwMaxRange: 35,
+    /** A player this close to a standing wall, in meters, counts as near walls (a grenade over the top flushes them out). */
+    nearWallDistance: 3,
+    /** Co-op: players within this distance of each other count as one group, and it aims at the middle of the biggest. */
+    groupRadius: 5,
+    /** Seconds of the overhand wind-up before the grenade leaves the hand (the players' warning), and of the follow-through after. */
+    windupTime: 0.6,
+    followThroughTime: 0.35,
+    /** Seconds between throws, random in the range, and grenades carried per life. */
+    cooldownMin: 6,
+    cooldownMax: 9,
+    grenades: 4,
+    /** The throw lands this far from where it aims, in meters, at random: `base` plus `perTenMeters` per 10 m of range. */
+    inaccuracy: { base: 0.8, perTenMeters: 0.7 },
+    /** Seconds in the air: `base` plus `perMeter` per meter of range (a high lob that clears walls). */
+    flightTime: { base: 1, perMeter: 0.04 },
+    /** Seconds from the planned landing to the blast (its fuse is cut to land and go off soon after). */
+    fuseAfterLanding: 0.6,
+  },
+  /**
+   * Mortar team: one soldier with a mortar. It walks to a firing spot outside the build radius, sets up and shells the
+   * inside of the base. Never breaches walls or plants charges.
+   */
+  mortar: {
+    hp: 120,
+    speed: 3.2,
+    /** Most mortar teams alive at once, and the pool size (the dead lie for a while). */
+    maxAlive: 2,
+    poolSize: 6,
+    /** The firing spot is this far from the core, in meters, within `sideAngle` degrees either side of the line to its spawn point. */
+    minRange: 45,
+    maxRange: 70,
+    sideAngle: 40,
+    /** Spots tried when choosing where to fire from; ones with blocked cells (rocks, props, ruins) within `coverRadius` meters win. */
+    spotCandidates: 40,
+    coverRadius: 4,
+    /** Two mortar teams keep their firing spots at least this far apart, in meters. */
+    spotSpacing: 12,
+    /** Seconds to put the mortar down and kneel, then seconds between shells (random in the range). */
+    setupTime: 3,
+    fireIntervalMin: 6,
+    fireIntervalMax: 8,
+    /**
+     * Shells walk in: the first one at a new target lands within `firstShotError` meters of it, each next one closer,
+     * down to `minError` after `walkInShots` shots. A new target every `shotsPerTargetMin`-`shotsPerTargetMax` shells.
+     */
+    firstShotError: 6,
+    minError: 2.5,
+    walkInShots: 3,
+    shotsPerTargetMin: 3,
+    shotsPerTargetMax: 4,
+    /**
+     * How often each kind of target is picked (relative weights; kinds with nothing to aim at are skipped): a player
+     * inside the build radius, the MG nest or a crate, the core, or any random point inside the build radius.
+     */
+    targetWeights: { player: 5, gear: 3, core: 2, random: 1 },
+    shell: {
+      /** Blast damage and radius, in meters, full damage inside `fullDamageRadius`. */
+      damage: 80,
+      radius: 5,
+      fullDamageRadius: 1.2,
+      /** Seconds in the air: `base` plus `perMeter` per meter from the mortar to the impact. */
+      flightTime: { base: 3, perMeter: 0.015 },
+      /** The incoming whistle starts at the impact point this many seconds before the shell lands. */
+      whistleLead: 1.2,
+      /** A dark streak shows the shell falling for its last this many seconds. */
+      streakTime: 0.3,
+      /** How high the shell's arc peaks, in meters (decides the angle of the falling streak). */
+      apexHeight: 60,
+      /** Shells in the air at once (pool size). */
+      maxActive: 8,
+    },
+    /** A player this close, in meters, makes it stop shelling and fight with its pistol until they are `defendExitRange` away. */
+    defendRange: 12,
+    defendExitRange: 16,
+    /** The pistol: weak hitscan. */
+    pistol: {
+      damage: 6,
+      range: 60,
+      /** Seconds between shots, random in the range, and from spotting the player to the first shot. */
+      fireIntervalMin: 0.45,
+      fireIntervalMax: 0.8,
+      reactionTime: 0.4,
+      /** Spread as a cone half-angle, in degrees, plus `targetMoving` when the player moves at walk speed. */
+      spread: 3,
+      targetMoving: 1.5,
+    },
   },
   satchel: {
     /**
@@ -775,13 +892,24 @@ export const config = {
     /** Prefix for the host's id on the PeerJS broker, so lobby codes do not collide with other apps. */
     peerPrefix: 'last-stand-fortress-',
     /** Give up on reaching the broker or a lobby after this many seconds. */
-    connectTimeout: 12,
+    connectTimeout: 15,
+    /**
+     * How players find a route to each other. STUN servers only tell each machine its public address, which is
+     * enough for most home networks. Players behind strict networks (some mobile, school or office networks, VPNs)
+     * also need a TURN relay: add one here, e.g. a free metered.ca account gives
+     * `{ urls: ['turn:<host>:80', 'turns:<host>:443?transport=tcp'], username: '<user>', credential: '<key>' }`.
+     * (PeerJS's own TURN servers, its default, no longer exist.)
+     */
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+    ] as RTCIceServer[],
     /** Longest callsign, in characters. */
     maxNameLength: 16,
   },
   debug: {
     /**
-     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, Shift+K, L, M, N, U (refill every gun), 7, 8, 9, 0), the debug overlay and enemy
+     * Debug tools: the test keys (F1, F3, F4, F6, F8, J, K, Shift+K, L, M, N, U (refill every gun), 5-9, 0), the debug overlay and enemy
      * view, the playtest log (console wave summaries, and F8 saves the run as JSON) and the console logging.
      * Turn off for release.
      */

@@ -8,14 +8,14 @@ import type { DamageableRegistry } from '../combat/DamageableRegistry';
 import type { DamageType } from '../combat/DamageType';
 import { Groups } from '../core/CollisionGroups';
 import { config } from '../core/config';
-import type { AllyTag, EventBus, GameEvents } from '../core/EventBus';
+import type { AllyTag, EventBus, ExplosionKind, GameEvents } from '../core/EventBus';
 import type { PlayerTarget } from '../enemies/EnemyContext';
 import { SoldierRenderer } from '../enemies/SoldierRenderer';
 import { createSoldierPose, SoldierRig } from '../enemies/SoldierRig';
 import type { PlayerState } from './protocol';
 
 /** Called on the host when an enemy shot or blast hits a teammate; the damage is dealt on their machine. */
-export type AllyHurtHandler = (id: string, amount: number, type: DamageType, from: Vector3, attacker: object | undefined) => void;
+export type AllyHurtHandler = (id: string, amount: number, type: DamageType, from: Vector3, attacker: object | undefined, blast: ExplosionKind | undefined) => void;
 
 const deg = MathUtils.degToRad;
 /** Name tags float this far over the feet, in meters (lower while crouched). */
@@ -53,7 +53,7 @@ class AllyBody implements Damageable {
 
   takeDamage(amount: number, type: DamageType, from: Vector3, info: DamageInfo = {}): void {
     if (info.source === 'player') return;
-    this.onHurt(this.owner.id, amount, type, from, info.attacker);
+    this.onHurt(this.owner.id, amount, type, from, info.attacker, info.blast);
   }
 }
 

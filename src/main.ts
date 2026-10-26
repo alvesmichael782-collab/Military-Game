@@ -193,7 +193,7 @@ async function boot(): Promise<void> {
       damageable: health,
     },
   ];
-  const enemies = new EnemyManager(scene, physics.world, grid, registry, events, structures, explosions, targets, core, map.spawnPoints);
+  const enemies = new EnemyManager(scene, physics.world, grid, registry, events, structures, explosions, grenades, targets, core, map.spawnPoints);
   const director = new WaveDirector(events, enemies, map.spawnPoints.length);
   const smoke = new SpawnSmoke(scene, events, map.spawnPoints);
   const mount = new MgMount(events, structures, player);
@@ -367,6 +367,8 @@ async function boot(): Promise<void> {
     if (input.wasPressed('F4')) enemyDebug.toggle();
     if (input.wasPressed('F8')) playtestLog?.download();
     if (input.wasPressed('F9')) stress?.toggle();
+    if (input.wasPressed('Digit5')) enemies.spawn('grenadier');
+    if (input.wasPressed('Digit6')) enemies.spawn('mortar');
     if (input.wasPressed('Digit7')) enemies.spawn('rifleman');
     if (input.wasPressed('Digit8')) enemies.spawn('sapper');
     if (input.wasPressed('Digit9')) enemies.killAll();

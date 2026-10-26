@@ -93,6 +93,11 @@ export class StructureManager {
     return n;
   }
 
+  /** Every live structure. */
+  all(): IterableIterator<Structure> {
+    return this.structures.values();
+  }
+
   /** The live structure with this id, if any. */
   byId(id: number): Structure | undefined {
     return this.structures.get(id);

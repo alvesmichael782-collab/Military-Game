@@ -57,3 +57,5 @@ Files not listed here (`footsteps/gravel/`, `weapons/m4a1/`) were in the project
 | `weapons/mg/mount.mp3` | Kenney "RPG Audio" pack, `metalLatch.ogg` (https://kenney.nl) |
 | `weapons/mg/overheat.mp3` | Freesound #234782, "Steam/hiss" by wubitog (https://freesound.org/s/234782/) |
 | `repair/repair_loop_01.mp3` | Freesound #202231, "hammering or knocking sound" by deraj (https://freesound.org/s/202231/) |
+| `effects/mortar_launch_01.mp3` | Synthesized for this project with ffmpeg (`scripts/synth-mortar-sounds.sh`), no source recording |
+| `effects/mortar_whistle_01.mp3` | Synthesized for this project with ffmpeg (`scripts/synth-mortar-sounds.sh`), no source recording |

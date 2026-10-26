@@ -1,7 +1,7 @@
 import type { StructureType } from '../build/Buildables';
 import type { DamageSource } from '../combat/Damage';
 import type { DamageType } from '../combat/DamageType';
-import type { GameOverReason, GameResult, ImpactSurface } from '../core/EventBus';
+import type { ExplosionKind, GameOverReason, GameResult, ImpactSurface } from '../core/EventBus';
 import type { Phase } from '../core/GameState';
 import type { Cell, Edge } from '../world/BuildGrid';
 
@@ -38,12 +38,13 @@ export type GameMessage =
   /** A shot: weapon def id (or 'mg'), muzzle, and where it stopped (null: hit nothing). */
   | { t: 'shot'; id?: string; w: string; m: V3; e: V3 | null }
   | { t: 'impact'; p: V3; n: V3; s: ImpactSurface }
-  | { t: 'grenade'; id?: string; p: V3; v: V3 }
+  /** A grenade: launch point, velocity and fuse, in seconds (a grenadier's on the host, sent as 'p0', is cut short to land and go off). */
+  | { t: 'grenade'; id?: string; p: V3; v: V3; f: number }
   // ---- Damage ----
   /** Client to host: its player hit an enemy ('e', by pool slot), a structure ('s', by id) or the core ('c'). */
   | { t: 'hit'; k: 'e' | 's' | 'c'; id: number; a: number; ty: DamageType; src: DamageSource; p: V3; h: boolean }
-  /** Host to client: something hit that client's player. `att` is the shooter's pool slot, or -1 for a blast. */
-  | { t: 'hurt'; a: number; ty: DamageType; p: V3; att: number }
+  /** Host to client: something hit that client's player. `att` is the shooter's pool slot, or -1 for a blast (`b` says what blew up). */
+  | { t: 'hurt'; a: number; ty: DamageType; p: V3; att: number; b?: ExplosionKind }
   // ---- World, host to clients ----
   | { t: 'event'; n: RelayedEvent; p: Record<string, unknown> }
   /** Every soldier on the field, `ENEMY_STRIDE` numbers each (see EnemySync.ts). */
@@ -52,6 +53,8 @@ export type GameMessage =
   | { t: 'timer'; ph: Phase; s: number }
   | { t: 'over'; res: GameResult; why: GameOverReason; w: number }
   | { t: 'satchel'; p: V3; y: number; f: number; d: boolean }
+  /** A mortar shell fired: from the mortar `p` to land on `i` in `f` seconds. Clients play the launch, the whistle and the blast; the host deals the damage. */
+  | { t: 'mortar'; p: V3; i: V3; f: number }
   | { t: 'core'; hp: number }
   | { t: 'ready'; r: number; n: number; ids: string[] }
   | { t: 'left'; id: string }

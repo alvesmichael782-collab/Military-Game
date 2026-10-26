@@ -285,6 +285,53 @@ export const SOUNDS: Readonly<Record<string, SoundDef>> = {
     spatial: '3d',
     refDistance: 10,
   },
+  /** A grenadier winds up a throw: "Grenade!" */
+  'vo.enemy.grenade': {
+    files: 'vo/enemy_grenade*',
+    bus: 'effects',
+    volume: 1,
+    pitchJitter: 0.03,
+    volumeJitter: 0.05,
+    maxInstances: 2,
+    spatial: '3d',
+    refDistance: 12,
+  },
+  /** A mortar team has set up: "Mortar in position!" */
+  'vo.enemy.mortarSetup': {
+    files: 'vo/enemy_mortar_setup*',
+    bus: 'effects',
+    volume: 1,
+    pitchJitter: 0.03,
+    volumeJitter: 0.05,
+    maxInstances: 2,
+    spatial: '3d',
+    refDistance: 16,
+  },
+  /** A mortar shell leaves the tube: a deep thump, heard from far off. */
+  'mortar.launch': {
+    files: 'effects/mortar_launch*',
+    bus: 'effects',
+    volume: 1,
+    pitchJitter: 0.06,
+    volumeJitter: 0.08,
+    maxInstances: 3,
+    spatial: '3d',
+    refDistance: 18,
+  },
+  /**
+   * A shell coming in, at its impact point, for the last `mortar.shell.whistleLead` seconds before it lands. The
+   * players' warning: enough instances that one never cuts off another.
+   */
+  'mortar.whistle': {
+    files: 'effects/mortar_whistle*',
+    bus: 'effects',
+    volume: 0.55,
+    pitchJitter: 0.04,
+    volumeJitter: 0.04,
+    maxInstances: 8,
+    spatial: '3d',
+    refDistance: 22,
+  },
   'satchel.beep': {
     files: 'effects/satchel_beep*',
     bus: 'effects',

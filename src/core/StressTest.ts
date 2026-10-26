@@ -17,8 +17,9 @@ const GRENADE_GAP = 0.4;
 const SATCHEL_GAP = 1.5;
 const SPAWN_GAP = 0.5;
 const REBUILD_GAP = 2;
-/** Every this many enemies spawned, one is a sapper. */
+/** Every this many enemies spawned, one is a sapper, and (of the rest) every this many a grenadier. Mortar teams are kept at their cap. */
 const SAPPER_EVERY = 4;
+const GRENADIER_EVERY = 3;
 /** How far outside a wall's face the blasts go off, in meters. */
 const BLAST_OFFSET = 0.6;
 
@@ -32,8 +33,8 @@ export interface StressTargets {
 }
 
 /**
- * Debug load test (`?stress` in the URL, or F9): a ring of 60 walls around the core, kept rebuilt; enemies topped
- * up to 20 alive; a grenade blast every 0.4 s and a satchel every 1.5 s against random walls, so debris and rubble
+ * Debug load test (`?stress` in the URL, or F9): a ring of 60 walls around the core, kept rebuilt; enemies of every
+ * type topped up to 20 alive (mortar teams at their cap, shelling the ring); a grenade blast every 0.4 s and a satchel every 1.5 s against random walls, so debris and rubble
  * pile up; the player kept alive. Runs until toggled off. The debug overlay (F3) shows the frame time split.
  */
 export class StressTest {
@@ -74,7 +75,15 @@ export class StressTest {
     if (this.spawnTimer <= 0) {
       this.spawnTimer = SPAWN_GAP;
       if (t.enemies.aliveCount < ENEMIES) {
-        const type = ++this.spawned % SAPPER_EVERY === 0 ? 'sapper' : 'rifleman';
+        const n = ++this.spawned;
+        const type =
+          t.enemies.aliveOf('mortar') < config.mortar.maxAlive
+            ? 'mortar'
+            : n % SAPPER_EVERY === 0
+              ? 'sapper'
+              : n % GRENADIER_EVERY === 0
+                ? 'grenadier'
+                : 'rifleman';
         t.enemies.spawnAtPoint(type, this.spawned % config.map.spawnPoints.length);
       }
     }

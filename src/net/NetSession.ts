@@ -1,5 +1,6 @@
 import Peer, { type DataConnection } from 'peerjs';
 import { config } from '../core/config';
+import { logRoutes } from './IceRoutes';
 import { LoopbackPeer } from './LoopbackPeer';
 import type { GameMessage } from './protocol';
 
@@ -40,7 +41,8 @@ const LOOPBACK = import.meta.env.DEV && new URLSearchParams(window.location.sear
 
 function createPeer(id?: string): Peer {
   if (LOOPBACK) return new LoopbackPeer(id) as unknown as Peer;
-  return id ? new Peer(id, { debug: 0 }) : new Peer({ debug: 0 });
+  const options = { debug: 0, config: { iceServers: config.multiplayer.iceServers } };
+  return id ? new Peer(id, options) : new Peer(options);
 }
 
 function peerIdFor(code: string): string {
@@ -72,6 +74,11 @@ function brokerError(type: string): NetError {
   if (type === 'peer-unavailable') return new NetError('No lobby with that code');
   if (type === 'browser-incompatible') return new NetError('This browser cannot play online');
   return new NetError('Cannot reach the lobby server');
+}
+
+/** The lobby exists, but no direct route to the host was found (see `config.multiplayer.iceServers`). */
+function unreachable(): NetError {
+  return new NetError('Found the lobby but could not connect to the host. Turn off any VPN and try again');
 }
 
 /**
@@ -146,13 +153,22 @@ export class NetSession {
   static async join(code: string, name: string): Promise<NetSession> {
     const peer = createPeer();
     const session = new NetSession('client', code, peer);
+    // The broker knows the lobby, but the direct link to the host has not opened.
+    let reaching = false;
+    let link: DataConnection | null = null;
     try {
       await withTimeout(
         new Promise<void>((resolve, reject) => {
-          peer.once('error', (error) => reject(brokerError(error.type)));
+          peer.once('error', (error) => reject(reaching && error.type !== 'peer-unavailable' ? unreachable() : brokerError(error.type)));
           peer.once('open', () => {
+            reaching = true;
             const connection = peer.connect(peerIdFor(code), { reliable: true, serialization: 'json' });
+            link = connection;
+            connection.on('iceStateChanged', (state) => {
+              if (state === 'failed') reject(unreachable());
+            });
             connection.once('open', () => {
+              reaching = false;
               session.connections.set(HOST_ID, connection);
               session.write(connection, { t: 'hello', name });
             });
@@ -166,13 +182,22 @@ export class NetSession {
               }
               session.receive(message, HOST_ID);
             });
-            connection.on('close', () => session.lost('The host left the game'));
-            connection.on('error', () => session.lost('Lost the connection to the host'));
+            connection.on('close', () => {
+              if (reaching) reject(unreachable());
+              session.lost('The host left the game');
+            });
+            connection.on('error', () => {
+              if (reaching) reject(unreachable());
+              session.lost('Lost the connection to the host');
+            });
           });
         }),
         'No answer from that lobby',
-      );
+      ).catch((error: unknown) => {
+        throw reaching ? unreachable() : error;
+      });
     } catch (error) {
+      if (reaching) await logRoutes(link);
       session.closed = true;
       peer.destroy();
       throw error;

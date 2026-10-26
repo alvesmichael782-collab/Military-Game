@@ -39,13 +39,13 @@ The MVP includes ONLY:
 - Player: first-person movement, armor plates plus health, hitscan guns and a knife (see "Weapons and Loadout"), frag grenades, repair tool
 - Build mode: first-person placement (aim at the ground, ghost preview, place), 2 m snap grid, one wall type, outpost core, one MG nest, the weapon crate and the consumables crate (see "Crate Shops")
 - Destruction: wall segments with 4 damage states (intact, damaged, breached, collapsed), debris, rubble
-- Enemies: riflemen and sappers
+- Enemies: riflemen, sappers, grenadiers, mortar teams (see "Enemies")
 - Waves: 10 waves, build -> fight -> aftermath loop; win after wave 10, lose if the core is destroyed
 - Start screen and co-op multiplayer, 1-4 players (see "Start Screen and Multiplayer")
 - Cash economy: earned from kills, spent on building, repairs, armor plates, and weapons
 - The HUD from `UI-Model.jpg` (see HUD Spec) and a retro render filter
 
-Do NOT add: non-first-person cameras (top-down, third-person, spectator), vehicles, tanks, extra wall tiers, extra enemy types, perks, power-ups, menus beyond the basics, or any feature not listed above unless explicitly asked.
+Do NOT add: non-first-person cameras (top-down, third-person, spectator), vehicles, tanks, extra wall tiers, perks, power-ups, menus beyond the basics, or any feature not listed above unless explicitly asked.
 
 ## Player Health and Armor Plates
 
@@ -81,11 +81,27 @@ Every weapon is one data file in `src/player/weapons/defs/` (stats, price, fire 
 
 **Moving parts** are animated only where the model has them as separate meshes, or as a rigid piece rigged to its own bone (the converter splits out the triangles bound to that bone, see `parts.*.bones` in `scripts/convert-weapons/weapons.mjs`). Today: magazines, and the SG-09 slide (cycles per shot, locks back on empty, released by the empty reload). Guns without a magazine part use hand-only reloads; the revolver uses tilt-and-load.
 
+## Enemies
+
+Four types, all built on `src/enemies/Enemy.ts` (pooled, Rapier character controller, head and body hitboxes, `think` at about 10 Hz plus `tick` per frame), drawn by `SoldierRenderer` (one instanced mesh per body part, extras like the satchel or bandolier are parts shown per soldier) and posed by `SoldierRig`. Costs, unlock waves, caps and every stat live in `config.ts` (`waves.costs`, `waves.unlockWave`, and one section per type).
+
+| Type | File | Unlocks | Cost | Role |
+| --- | --- | --- | --- | --- |
+| Rifleman | `Rifleman.ts` | wave 1 | 2 | Advances on the core along its path, takes cover when it sees a player and fires hitscan bursts; shoots the wall in its way or the core when nobody is in sight. |
+| Sapper | `Sapper.ts` | wave 3 | 5 | No rifle, satchel on the chest, red helmet band. Sprints to its breach wall (or the core), plants a charge, runs back, repeats. Drops an armed charge when killed. At most `maxSapperShare` of a wave. |
+| Grenadier | `Grenadier.ts` | wave 4 | 4 | A rifleman (subclass, slightly worse aim) with a tan bandolier and belt pouches. Punishes players hiding behind walls: when a player 12-35 m away is out of sight or next to walls, it stops, winds up an overhand throw (0.6 s, shouts "Grenade!") and lobs a frag on an arc to them (in co-op, at the biggest group). 4 grenades, 6-9 s apart. At most `maxGrenadierShare` of a wave. |
+| Mortar team | `MortarTeam.ts` | wave 6 | 8 | One soldier carrying a mortar. Walks to a firing spot 45-70 m out on its spawn side (next to cover when it can), sets up (3 s, kneels, ammo crate, "Mortar in position!") and shells the inside of the base every 6-8 s: targets weighted toward players, then the MG nest and crates, then the core, walking each series in from about 6 m to 2.5 m. Each shell: launch thump, a whistle at the impact point about 1.2 s before it lands, then `explode()`. Players within 12 m make it fight with a pistol. Never breaches walls. At most `maxAlive` up at once; spawns on its own, not in a squad. |
+
+- Enemy grenades come from the shared `Grenades` pool with source `enemy`; mortar shells from `MortarShells` (in `EnemyContext`). Both hurt players, walls, structures and other enemies like any explosion.
+- All AI runs on the host. Clients get each soldier's type, pose and kit flags in `EnemySync` snapshots, grenades through the `grenade` message and shells through the `mortar` message (sounds and effects only; the host deals the damage).
+- A new enemy type needs: a class in `src/enemies/`, a pool in `EnemyManager`, its cost, unlock wave and share or cap in `config.waves`, its kill reward in `economy.killRewards`, its stats section in config, and its look as parts in `SoldierGeometry`/`SoldierRig`.
+- Debug: 7 rifleman, 8 sapper, 5 grenadier, 6 mortar team; F4 shows paths, breach walls, grenade arcs and mortar firing spots, targets and accuracy circles.
+
 ## Cash Economy
 
 The player earns **cash**, never "points" or "salvage". Cash is always shown with a dollar sign.
 
-- Earned from kills (rifleman $100, sapper $200, headshot bonus +$50) and a wave-clear bonus. All values in config.
+- Earned from kills (rifleman $100, sapper $200, grenadier $150, mortar team $300, headshot bonus +$50) and a wave-clear bonus. All values in config.
 - In multiplayer every player has their own cash. A kill pays only the player who made it; the wave-clear bonus pays every player in full; each player pays for what they build, repair and buy. Removing a structure refunds whoever built it.
 - Spent on walls, repairs, the MG nest, the two crates, armor plates and grenades from the consumables crate, and weapons and ammo from the weapon crate.
 - Events: `cashEarned`, `cashSpent`.
@@ -104,7 +120,7 @@ There is no fixed armor crate. Both shops are buildable structures (build tool, 
 
 **Start screen** (`src/ui/start/`): the title and SINGLE PLAYER / MULTIPLAYER on the left over the live map (a slow orbit around the core, through the retro filter), in the pause menu's style (bevelled panels, khaki text, one red accent, HUD fonts). The game loads behind it. Multiplayer opens a panel: callsign (saved), CREATE LOBBY, or JOIN with a 5-character code. The lobby shows the code (COPY), the squad (4 slots, HOST / YOU, LOADING / READY) and START for the host once everyone has loaded. After a single player game, Enter restarts straight into a new one; after a multiplayer game it goes back to the menu.
 
-**Networking** (`src/net/`): co-op for up to 4 players over WebRTC data channels with PeerJS (its public broker only introduces the peers; the host's peer id is built from the lobby code). Star layout, host-authoritative world. `NetSession` (lobby, batched messages, one flush per frame), `NetGame` (coordinator), `protocol.ts` (every message), `EventRelay` (host events clients replay), `EnemySync` (host snapshots, client interpolation), `RemotePlayers` (teammates), `StructureSync` (structures). Rates and limits in `config.multiplayer`.
+**Networking** (`src/net/`): co-op for up to 4 players over WebRTC data channels with PeerJS (its public broker only introduces the peers; the host's peer id is built from the lobby code). Star layout, host-authoritative world. `NetSession` (lobby, batched messages, one flush per frame), `NetGame` (coordinator), `protocol.ts` (every message), `EventRelay` (host events clients replay), `EnemySync` (host snapshots, client interpolation), `RemotePlayers` (teammates), `StructureSync` (structures). Rates and limits in `config.multiplayer`. Routes between players come from `config.multiplayer.iceServers` (STUN only; PeerJS's own TURN relays no longer exist, so players behind strict networks or a VPN need a TURN server added there).
 - **Host** runs everything as in single player: phases, the wave director, enemy AI, satchels, structure HP, the core. Waves grow by `extraPlayerBudget` per extra player.
 - **Clients** run their own player (movement, aim, weapons, cash, shops, build tool) and follow the host: `GameState.follow`, `EnemyManager.setReplica` (soldiers posed from snapshots, hitboxes kept, no AI), `WaveDirector.disable`. Their hits on enemies, structures and the core go to the host through the damage router (`setDamageRouter` in `combat/Damage.ts`), which applies them with that player's id, so kill credit is right. Builds, removals, rubble clears and repairs are requests to the host (`StructureCommands`); HP changes come back as differences.
 - **Every machine** sends its player's state (`playerSendRate`), shots (`allyFired`: flash, tracer, positioned sound), impacts and grenades. Other players' grenades and the host's satchels are mirrored as `harmless` copies; only the owner's copy deals damage.

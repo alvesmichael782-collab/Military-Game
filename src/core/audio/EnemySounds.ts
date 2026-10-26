@@ -5,22 +5,31 @@ import type { SoundBank } from './SoundBank';
 
 /** Enemy rifles reuse the player's rifle recordings, played a little lower so they read as a different gun. */
 const ENEMY_RIFLE_RATE = 0.9;
+/** The mortar team's pistol borrows them too, played higher and quieter. */
+const ENEMY_PISTOL_RATE = 1.3;
+const ENEMY_PISTOL_VOLUME = 0.7;
 
 const CALLOUTS: Record<EnemyCallout, string> = {
   contact: 'vo.enemy.contact',
   breach: 'vo.enemy.breach',
   chargeSet: 'vo.enemy.chargeSet',
+  grenade: 'vo.enemy.grenade',
+  mortarSetup: 'vo.enemy.mortarSetup',
 };
 
 /**
- * Plays enemy sounds from events, all positioned in the world: rifle fire, footsteps, pain and death,
- * voice callouts (each line at most once per `config.enemies.calloutGap` seconds, from any enemy), and
- * satchel beeps. Entries without files stay silent until their recordings are added.
+ * Plays enemy sounds from events, all positioned in the world: rifle and pistol fire, footsteps, pain and death,
+ * voice callouts (each line at most once per `config.enemies.calloutGap` seconds, from any enemy), satchel beeps,
+ * and mortar launches and incoming whistles (every one: the whistle is the players' warning). Entries without
+ * files stay silent until their recordings are added.
  */
 export function connectEnemySounds(events: EventBus<GameEvents>, sounds: SoundBank): void {
   const lastCallout = new Map<EnemyCallout, number>();
 
-  events.on('enemyFired', ({ muzzle }) => sounds.play('weapon.enemyRifle.fire', { position: muzzle, rate: ENEMY_RIFLE_RATE }));
+  events.on('enemyFired', ({ type, muzzle }) => {
+    if (type === 'mortar') sounds.play('weapon.enemyRifle.fire', { position: muzzle, rate: ENEMY_PISTOL_RATE, volume: ENEMY_PISTOL_VOLUME });
+    else sounds.play('weapon.enemyRifle.fire', { position: muzzle, rate: ENEMY_RIFLE_RATE });
+  });
   events.on('enemyFootstep', ({ position }) => sounds.play('enemy.footstep', { position }));
   events.on('enemyDamaged', ({ position }) => sounds.play('enemy.hurt', { position: { x: position.x, y: position.y + 1.5, z: position.z } }));
   events.on('enemyKilled', ({ position }) => sounds.play('enemy.death', { position: { x: position.x, y: position.y + 1.2, z: position.z } }));
@@ -32,4 +41,6 @@ export function connectEnemySounds(events: EventBus<GameEvents>, sounds: SoundBa
     sounds.play(CALLOUTS[line], { position });
   });
   events.on('satchelBeep', ({ position }) => sounds.play('satchel.beep', { position }));
+  events.on('mortarFired', ({ position }) => sounds.play('mortar.launch', { position }));
+  events.on('mortarWhistle', ({ position }) => sounds.play('mortar.whistle', { position: { x: position.x, y: position.y + 2, z: position.z } }));
 }

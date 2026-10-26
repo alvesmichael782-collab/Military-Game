@@ -317,6 +317,8 @@ export interface DamageDealtEvent {
   player: string | null;
   /** True when a multiplayer client sent the hit on to the host instead of applying it; `killed` is then a guess. */
   routed: boolean;
+  /** What blew up, for explosive damage from a blast; null otherwise. */
+  blast: ExplosionKind | null;
 }
 
 export interface WeaponEvent {
@@ -420,7 +422,7 @@ export interface GrenadeBouncedEvent {
 }
 
 /** What blew up, so each kind can have its own sound. */
-export type ExplosionKind = 'frag' | 'satchel';
+export type ExplosionKind = 'frag' | 'satchel' | 'mortar';
 
 export interface ExplosionEvent {
   /** Blast center. Only valid while the event dispatches; copy to keep. */
@@ -500,6 +502,16 @@ export interface SquadSpawnedEvent {
   spawnPoint: number;
   riflemen: number;
   sappers: number;
+  grenadiers: number;
+}
+
+/** A mortar team fired a shell. */
+export interface MortarFiredEvent {
+  /** The mortar's muzzle and where the shell will land. Only valid while the event dispatches; copy to keep. */
+  position: Vector3;
+  impact: Vector3;
+  /** Seconds until it lands. */
+  flightTime: number;
 }
 
 export interface EnemiesRemainingEvent {
@@ -522,6 +534,8 @@ export interface WaveSummaryEvent {
   wallsLost: number;
   coreHp: number;
   coreMaxHp: number;
+  /** The player's kills by enemy type. */
+  killsByType: Record<EnemyType, number>;
 }
 
 export type GameResult = 'won' | 'lost';
@@ -538,6 +552,8 @@ export interface GameOverEvent {
 /** Totals for the whole game, for the win and lose screens. */
 export interface MatchSummaryEvent extends GameOverEvent {
   kills: number;
+  /** The player's kills by enemy type. */
+  killsByType: Record<EnemyType, number>;
   headshots: number;
   cashEarned: number;
   wavesSurvived: number;
@@ -594,6 +610,10 @@ export interface GrenadeThrownEvent {
   /** Only valid while the event dispatches; copy to keep. */
   position: Vector3;
   velocity: Vector3;
+  /** Seconds from the throw to the blast. */
+  fuse: number;
+  /** The player's (or a teammate's) grenade, or a grenadier's. */
+  source: DamageSource;
 }
 
 /** Multiplayer: how many players have pressed the start key to begin the wave (or skip the summary). */
@@ -744,6 +764,9 @@ export interface GameEvents {
   enemyCallout: EnemyCalloutEvent;
   satchelArmed: SatchelArmedEvent;
   satchelBeep: WorldSoundEvent;
+  mortarFired: MortarFiredEvent;
+  /** A mortar shell's incoming whistle starts, at its impact point. */
+  mortarWhistle: WorldSoundEvent;
   wavePlanned: WavePlannedEvent;
   waveStarted: WaveStartedEvent;
   squadSpawned: SquadSpawnedEvent;

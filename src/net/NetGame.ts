@@ -8,7 +8,7 @@ import type { DamageableRegistry } from '../combat/DamageableRegistry';
 import type { DamageType } from '../combat/DamageType';
 import type { Grenades } from '../combat/Grenades';
 import { config } from '../core/config';
-import type { EventBus, GameEvents } from '../core/EventBus';
+import type { EventBus, ExplosionKind, GameEvents } from '../core/EventBus';
 import { Phase, type GameState } from '../core/GameState';
 import type { CashWallet } from '../economy/CashWallet';
 import { Enemy } from '../enemies/Enemy';
@@ -93,7 +93,7 @@ export class NetGame {
       sys.targets,
       (id) => sys.structures.byId(id),
       this.isHost ? sys.registry : null,
-      (id, amount, type, from, attacker) => this.hurtAlly(id, amount, type, from, attacker),
+      (id, amount, type, from, attacker, blast) => this.hurtAlly(id, amount, type, from, attacker, blast),
     );
     for (const p of session.players) if (p.id !== session.localId) this.remotes.add(p.id, p.name);
     this.structureSync = new StructureSync(session, events, sys.structures, sys.grid, sys.wallet, sys.state);
@@ -176,7 +176,10 @@ export class NetGame {
     events.on('bulletImpact', ({ point, normal, surface }) => {
       if (!this.replaying) session.send({ t: 'impact', p: v3(point), n: [round3(normal.x), round3(normal.y), round3(normal.z)], s: surface });
     });
-    events.on('grenadeThrown', ({ position, velocity }) => session.send({ t: 'grenade', id: localPlayerId(), p: v3(position), v: v3(velocity) }));
+    // The player's grenades, and on the host the grenadiers' too.
+    events.on('grenadeThrown', ({ position, velocity, fuse }) =>
+      session.send({ t: 'grenade', id: localPlayerId(), p: v3(position), v: v3(velocity), f: round3(fuse) }),
+    );
     events.on('playerDied', () => events.emit('playerDowned', { down: true }));
     events.on('phaseChanged', ({ to }) => {
       if (to === Phase.BUILD) this.revive();
@@ -196,6 +199,7 @@ export class NetGame {
     events.on('gameOver', ({ result, reason, wave }) => session.send({ t: 'over', res: result, why: reason, w: wave }));
     events.on('coreDamaged', ({ hp }) => session.send({ t: 'core', hp }));
     events.on('satchelArmed', ({ position, yaw, fuse, dropped }) => session.send({ t: 'satchel', p: v3(position), y: round3(yaw), f: fuse, d: dropped }));
+    events.on('mortarFired', ({ position, impact, flightTime }) => session.send({ t: 'mortar', p: v3(position), i: v3(impact), f: round3(flightTime) }));
     session.onPeerLeft = (id, name) => {
       this.remotes.remove(id);
       this.votes.delete(id);
@@ -247,7 +251,7 @@ export class NetGame {
         session.sendExcept(from, message);
         break;
       case 'grenade':
-        this.showGrenade(message.p, message.v);
+        this.showGrenade(message.p, message.v, message.f);
         session.sendExcept(from, { ...message, id: from });
         break;
       case 'hit':
@@ -274,11 +278,11 @@ export class NetGame {
         this.showImpact(message.p, message.n, message.s);
         break;
       case 'grenade':
-        this.showGrenade(message.p, message.v);
+        this.showGrenade(message.p, message.v, message.f);
         break;
       case 'hurt': {
         const attacker = message.att >= 0 ? sys.enemies.bySlot(message.att) : undefined;
-        applyDamage(sys.health, message.a, message.ty, toVector(message.p, scratch), { source: 'enemy', attacker });
+        applyDamage(sys.health, message.a, message.ty, toVector(message.p, scratch), { source: 'enemy', attacker, blast: message.b });
         break;
       }
       case 'event':
@@ -300,6 +304,9 @@ export class NetGame {
         break;
       case 'satchel':
         sys.enemies.satchels.arm(toVector(message.p, scratch), message.y, message.f, message.d, true);
+        break;
+      case 'mortar':
+        sys.enemies.mortarShells.fire(toVector(message.p, scratch), toVector(message.i, scratchEnd), message.f, true);
         break;
       case 'core': {
         const lost = sys.core.health - message.hp;
@@ -356,9 +363,9 @@ export class NetGame {
   }
 
   /** Host: an enemy shot or blast hit a teammate. Their machine deals it to them. */
-  private hurtAlly(id: string, amount: number, type: DamageType, from: Vector3, attacker: object | undefined): void {
+  private hurtAlly(id: string, amount: number, type: DamageType, from: Vector3, attacker: object | undefined, blast: ExplosionKind | undefined): void {
     const att = attacker instanceof Enemy ? attacker.slot : -1;
-    this.sys.session.sendTo(id, { t: 'hurt', a: Math.round(amount * 100) / 100, ty: type, p: v3(from), att });
+    this.sys.session.sendTo(id, { t: 'hurt', a: Math.round(amount * 100) / 100, ty: type, p: v3(from), att, ...(blast ? { b: blast } : {}) });
   }
 
   // ---- Showing what others did ----
@@ -380,8 +387,8 @@ export class NetGame {
     this.replaying = false;
   }
 
-  private showGrenade(position: V3, velocity: V3): void {
-    this.sys.grenades.throw(toVector(position), toVector(velocity), 'player', true);
+  private showGrenade(position: V3, velocity: V3, fuse: number): void {
+    this.sys.grenades.throw(toVector(position), toVector(velocity), 'player', true, fuse);
   }
 
   // ---- Votes, down and back up ----
